@@ -76,6 +76,8 @@ import Data.Text.Class
     ( FromText (..) )
 import Data.Time.Clock
     ( getCurrentTime )
+import Data.Word
+    ( Word16, Word64 )
 import System.IO.Temp
     ( emptySystemTempFile )
 import System.IO.Unsafe
@@ -313,6 +315,9 @@ testWid = PrimaryKey (WalletId (hash @ByteString "test"))
 testTxs :: [(Hash "Tx", (Tx, TxMeta))]
 testTxs =
     [ (Hash "tx2", (Tx [TxIn (Hash "tx1") 0] [TxOut (Address "addr") (Coin 1)]
-      , TxMeta InLedger Incoming (SlotId 14 0) (Quantity 1337144))
+      , TxMeta InLedger Incoming (testSlotId 14 0) (Quantity 1337144))
       )
     ]
+
+testSlotId :: Word64 -> Word16 -> SlotId
+testSlotId = SlotId

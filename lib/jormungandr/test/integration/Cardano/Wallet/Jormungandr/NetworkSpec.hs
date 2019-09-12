@@ -80,7 +80,7 @@ import Data.Proxy
 import Data.Quantity
     ( Quantity (..) )
 import Data.Word
-    ( Word8 )
+    ( Word16, Word64, Word8 )
 import GHC.Generics
     ( Generic )
 import Network.HTTP.Client
@@ -161,7 +161,7 @@ spec = do
             -- for what it's worth, I didn't bother retrying.
             bytes <- BS.pack <$> generate (vectorOf 32 arbitrary)
             let block = BlockHeader
-                    { slotId = SlotId 42 14 -- Anything
+                    { slotId = testSlotId 42 14 -- Anything
                     , prevBlockHash = Hash bytes
                     }
             resp <- runExceptT $ nextBlocks nw block
@@ -480,3 +480,6 @@ shrinkFixedBS bs = [zeros | bs /= zeros]
 
 prependTag :: Int -> ByteString -> ByteString
 prependTag tag bs = BS.pack [fromIntegral tag] <> bs
+
+testSlotId :: Word64 -> Word16 -> SlotId
+testSlotId = SlotId

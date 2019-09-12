@@ -20,6 +20,8 @@ import Cardano.Wallet.Primitive.Types
     )
 import Data.Text
     ( Text )
+import Data.Word
+    ( Word16, Word64 )
 import Fmt
     ( pretty )
 import Test.Hspec
@@ -31,7 +33,7 @@ spec = do
         it "Block" $ do
             let block = Block
                     { header = BlockHeader
-                        { slotId = SlotId 14 19
+                        { slotId = testSlotId 14 19
                         , prevBlockHash = Hash "\223\252\&5\ACK\211\129\&6\DC4h7b'\225\201\&2:/\252v\SOH\DC1\ETX\227\"Q$\240\142ii\167;"
                         }
                     , transactions =
@@ -60,3 +62,6 @@ spec = do
             \      <~ 3823755953610 @ 82d81858...aebb3709\n\
             \      <~ 19999800000 @ 82d81858...37ce9c60\n"
                 `shouldBe` pretty @_ @Text block
+
+testSlotId :: Word64 -> Word16 -> SlotId
+testSlotId = SlotId

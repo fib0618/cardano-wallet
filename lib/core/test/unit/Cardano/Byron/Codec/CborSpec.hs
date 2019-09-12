@@ -59,7 +59,7 @@ import Data.Either
 import Data.Text
     ( Text )
 import Data.Word
-    ( Word32 )
+    ( Word16, Word32, Word64 )
 import Test.Hspec
     ( Expectation, HasCallStack, Spec, describe, it, shouldBe, shouldSatisfy )
 import Test.QuickCheck
@@ -299,10 +299,13 @@ instance Arbitrary (Index 'Hardened 'AccountK) where
                                   Test Data
 -------------------------------------------------------------------------------}
 
+testSlotId :: Word64 -> Word16 -> SlotId
+testSlotId = SlotId
+
 -- A mainnet block header
 blockHeader1 :: BlockHeader
 blockHeader1 = BlockHeader
-    { slotId = SlotId 105 9520
+    { slotId = testSlotId 105 9520
     , prevBlockHash = Hash $ unsafeFromHex
         "9f3c67b575bf2c5638291949694849d6ce5d29efa1f2eb3ed0beb6dac262e9e0"
     }
@@ -311,7 +314,7 @@ blockHeader1 = BlockHeader
 block1 :: Block ([TxIn], [TxOut])
 block1 = Block
     { header = BlockHeader
-        { slotId = SlotId 105 9519
+        { slotId = testSlotId 105 9519
         , prevBlockHash = prevBlockHash0
         }
     , transactions = mempty
@@ -324,7 +327,7 @@ block1 = Block
 block2 :: Block ([TxIn], [TxOut])
 block2 = Block
     { header = BlockHeader
-        { slotId = SlotId 105 9876
+        { slotId = testSlotId 105 9876
         , prevBlockHash = prevBlockHash0
         }
     , transactions =
@@ -353,7 +356,7 @@ block2 = Block
 block3 :: Block ([TxIn], [TxOut])
 block3 = Block
     { header = BlockHeader
-        { slotId = SlotId 30 9278
+        { slotId = testSlotId 30 9278
         , prevBlockHash = prevBlockHash0
         }
     , transactions =
@@ -386,7 +389,7 @@ block3 = Block
 block4 :: Block ([TxIn], [TxOut])
 block4 = Block
     { header = BlockHeader
-        { slotId = SlotId 14 18
+        { slotId = testSlotId 14 18
         , prevBlockHash = prevBlockHash0
         }
     , transactions =

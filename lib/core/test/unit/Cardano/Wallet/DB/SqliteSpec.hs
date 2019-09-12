@@ -99,6 +99,8 @@ import Data.Text.Class
     ( FromText (..) )
 import Data.Time.Clock
     ( getCurrentTime )
+import Data.Word
+    ( Word16, Word64 )
 import GHC.Conc
     ( TVar, atomically, newTVarIO, readTVarIO, writeTVar )
 import System.Directory
@@ -367,13 +369,16 @@ testTxs :: [(Hash "Tx", (Tx, TxMeta))]
 testTxs =
     [ (Hash "tx2"
       , (Tx [TxIn (Hash "tx1") 0] [TxOut (Address "addr") (Coin 1)]
-        , TxMeta InLedger Incoming (SlotId 14 0) (Quantity 1337144))) ]
+        , TxMeta InLedger Incoming (testSlotId 14 0) (Quantity 1337144))) ]
 
 testPassphraseAndHash :: IO (Passphrase "encryption", Hash "encryption")
 testPassphraseAndHash = do
     let Right phr = fromText "abcdefghijklmnop"
     h <- encryptPassphrase phr
     pure (phr, h)
+
+testSlotId :: Word64 -> Word16 -> SlotId
+testSlotId = SlotId
 
 class GenerateTestKey (key :: Depth -> * -> *) where
     generateTestKey :: IO (key 'RootK XPrv, Hash "encryption")
