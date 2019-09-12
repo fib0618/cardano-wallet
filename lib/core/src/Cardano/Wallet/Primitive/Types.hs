@@ -87,7 +87,6 @@ module Cardano.Wallet.Primitive.Types
     , slotFloor
     , slotAt
     , slotDifference
-    , slotMinBound
     , slotPred
     , slotSucc
     , slotRangeFromTimeRange
@@ -926,7 +925,7 @@ computeUtxoStatistics btype utxos =
 --
 newtype SlotId = SlotId
     { getSlotId :: Word64
-    } deriving stock (Show, Read, Eq, Ord, Generic)
+    } deriving stock (Bounded, Show, Read, Eq, Ord, Generic)
 
 instance Buildable SlotId where
     build (SlotId s) = fromString (show s)
@@ -1037,16 +1036,12 @@ slotStartTime (SlotParameters _ (SlotLength sl) (StartTime st)) slot =
 --   time 's' such that 't ≤ s'.
 slotCeiling :: SlotParameters -> UTCTime -> SlotId
 slotCeiling sp@(SlotParameters _ (SlotLength sl) _) t =
-    fromMaybe slotMinBound $ slotAt sp (addUTCTime (pred sl) t)
+    fromMaybe minBound $ slotAt sp (addUTCTime (pred sl) t)
 
 -- | For the given time 't', determine the ID of the latest slot with start
 --   time 's' such that 's ≤ t'.
 slotFloor :: SlotParameters -> UTCTime -> Maybe SlotId
 slotFloor = slotAt
-
--- | Returns the earliest slot.
-slotMinBound :: SlotId
-slotMinBound = SlotId 0
 
 -- | For the given time 't', determine the ID of the unique slot with start
 --   time 's' and end time 'e' such that 's ≤ t ≤ e'.

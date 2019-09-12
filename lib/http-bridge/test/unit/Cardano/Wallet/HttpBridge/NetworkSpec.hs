@@ -24,7 +24,6 @@ import Cardano.Wallet.Primitive.Types
     , SlotId (..)
     , epochSlotIdToSlotId
     , slotIdToEpochSlotId
-    , slotMinBound
     )
 import Control.Monad.Trans.Class
     ( lift )
@@ -112,7 +111,7 @@ spec = do
 
         it "should work for the first epoch" $ do
             let h = BlockHeader
-                    { slotId = slotMinBound
+                    { slotId = minBound
                     , prevBlockHash = Hash "genesis"
                     }
             Right blocks <- runExceptT $ nextBlocks network h

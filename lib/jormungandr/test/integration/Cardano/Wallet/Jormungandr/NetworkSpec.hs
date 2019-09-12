@@ -52,7 +52,6 @@ import Cardano.Wallet.Primitive.Types
     , TxOut (..)
     , TxWitness (..)
     , epochSlotIdToSlotId
-    , slotMinBound
     )
 import Cardano.Wallet.Transaction
     ( ErrDecodeSignedTx (..), TransactionLayer (..) )
@@ -139,7 +138,7 @@ spec = do
             resp `shouldSatisfy` isRight
             let (Right slot) = slotId . fst <$> resp
             let (Right height) = snd <$> resp
-            slot `shouldSatisfy` (>= slotMinBound)
+            slot `shouldSatisfy` (>= minBound)
             height `shouldSatisfy` (>= Quantity 0)
 
         it "get some blocks from the genesis" $ \(_, nw, _) -> do

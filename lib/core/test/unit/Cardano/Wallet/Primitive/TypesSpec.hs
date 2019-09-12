@@ -74,7 +74,6 @@ import Cardano.Wallet.Primitive.Types
     , slotDifference
     , slotFloor
     , slotIdToEpochSlotId
-    , slotMinBound
     , slotPred
     , slotRangeFromTimeRange
     , slotRatio
@@ -333,38 +332,38 @@ spec = do
 
     describe "Slot arithmetic" $ do
 
-        it "slotFloor (slotStartTime slotMinBound) == Just slotMinBound" $
+        it "slotFloor (slotStartTime minBound) == Just minBound" $
             withMaxSuccess 1000 $ property $ \sps ->
-                slotFloor sps (slotStartTime sps slotMinBound)
-                    === Just slotMinBound
+                slotFloor sps (slotStartTime sps minBound)
+                    === Just minBound
 
-        it "slotFloor (utcTimePred (slotStartTime slotMinBound)) == Nothing" $
+        it "slotFloor (utcTimePred (slotStartTime minBound)) == Nothing" $
             withMaxSuccess 1000 $ property $ \sps ->
-                slotFloor sps (utcTimePred (slotStartTime sps slotMinBound))
+                slotFloor sps (utcTimePred (slotStartTime sps minBound))
                     === Nothing
 
-        it "t < slotStartTime slotMinBound => slotFloor t == Nothing" $
+        it "t < slotStartTime minBound => slotFloor t == Nothing" $
             withMaxSuccess 1000 $ property $ \sps t ->
                 (StartTime $ getUniformTime t) < getGenesisBlockDate sps ==>
                     slotFloor sps (getUniformTime t) === Nothing
 
-        it "t < slotStartTime slotMinBound => slotCeiling t == slotMinBound" $
+        it "t < slotStartTime minBound => slotCeiling t == minBound" $
             withMaxSuccess 1000 $ property $ \sps t ->
                 (StartTime $ getUniformTime t) < getGenesisBlockDate sps ==>
-                    slotCeiling sps (getUniformTime t) === slotMinBound
+                    slotCeiling sps (getUniformTime t) === minBound
 
-        it "slotStartTime slotMinBound `isAfterRange` r => \
+        it "slotStartTime minBound `isAfterRange` r => \
             \isNothing (slotRangeFromTimeRange r)" $
             withMaxSuccess 1000 $ property $ \sps r -> do
                 let r' = getUniformTime <$> r
-                slotStartTime sps slotMinBound `isAfterRange` r' ==>
+                slotStartTime sps minBound `isAfterRange` r' ==>
                     isNothing (slotRangeFromTimeRange sps r')
 
-        it "applyN slot slotPred slot == Just slotMinBound" $
+        it "applyN slot slotPred slot == Just minBound" $
             withMaxSuccess 10 $ property $
                 \(sps, slot) -> do
                     let n = getSlotId slot
-                    Just slotMinBound ===
+                    Just minBound ===
                         applyN n (slotPred sps =<<) (Just slot)
 
         it "applyN (slot + 1) slotPred slot == Nothing" $
@@ -438,10 +437,10 @@ spec = do
                     let f = slotFloor sps . slotStartTime sps
                     Just slot === f slot
 
-        it "slot > slotMinBound => \
+        it "slot > minBound => \
             \slotSucc . slotFloor . utcTimePred . slotStartTime == id" $
             withMaxSuccess 1000 $ property $
-                \(sps, slot) -> slot > slotMinBound ==> do
+                \(sps, slot) -> slot > minBound ==> do
                     let f = fmap (slotSucc sps)
                             . slotFloor sps
                             . utcTimePred
@@ -474,7 +473,7 @@ spec = do
                     upperBoundSucc = mapRangeUpperBound slotSucc'
 
                     slotPred' :: SlotId -> SlotId
-                    slotPred' s = fromMaybe slotMinBound $ slotPred sps s
+                    slotPred' s = fromMaybe minBound $ slotPred sps s
 
                     slotSucc' :: SlotId -> SlotId
                     slotSucc' = slotSucc sps
@@ -575,8 +574,8 @@ spec = do
             (checkCoverage prop_2_6_2)
 
     describe "Slotting ordering" $ do
-        it "Any Slot >= slotMinBound"
-            (property (>= slotMinBound))
+        it "Any Slot >= minBound"
+            (property (>= minBound @SlotId))
         it "EpochSlotId 1 2 < EpochSlotId 2 1"
             (property $ EpochSlotId { epochNumber = 1, slotNumber = 2 }
                 < EpochSlotId 2 1)
