@@ -1045,23 +1045,9 @@ slotFloor = slotAt
 -- | For the given time 't', determine the ID of the unique slot with start
 --   time 's' and end time 'e' such that 's ≤ t ≤ e'.
 slotAt :: SlotParameters -> UTCTime -> Maybe SlotId
-slotAt (SlotParameters (EpochLength el) (SlotLength sl) (StartTime st)) t
+slotAt (SlotParameters _ (SlotLength sl) (StartTime st)) t
     | t < st = Nothing
-    | otherwise = Just
-        $ epochSlotIdToSlotId (EpochLength el)
-        $ EpochSlotId {epochNumber, slotNumber}
-  where
-    diff :: NominalDiffTime
-    diff = t `diffUTCTime` st
-
-    epochLength :: NominalDiffTime
-    epochLength = fromIntegral el * sl
-
-    epochNumber :: Word64
-    epochNumber = floor (diff / epochLength)
-
-    slotNumber :: Word16
-    slotNumber = floor ((diff - (fromIntegral epochNumber) * epochLength) / sl)
+    | otherwise = Just $ SlotId $ floor ((t `diffUTCTime` st) / sl)
 
 -- | Transforms the given inclusive time range into an inclusive slot range.
 --
