@@ -361,30 +361,30 @@ spec = do
 
         it "applyN slot slotPred slot == Just minBound" $
             withMaxSuccess 10 $ property $
-                \(sps, slot) -> do
+                \slot -> do
                     let n = getSlotId slot
                     Just minBound ===
-                        applyN n (slotPred sps =<<) (Just slot)
+                        applyN n (slotPred =<<) (Just slot)
 
         it "applyN (slot + 1) slotPred slot == Nothing" $
             withMaxSuccess 10 $ property $
-                \(sps, slot) -> do
+                \slot -> do
                     let n = getSlotId slot + 1
-                    Nothing === applyN n (slotPred sps =<<) (Just slot)
+                    Nothing === applyN n (slotPred =<<) (Just slot)
 
         it "(applyN n slotSucc) . (applyN n slotPred) == id" $
             withMaxSuccess 1000 $ property $
                 \(sps, slot) (NonNegative (n :: Int)) ->
                     getSlotId slot >= fromIntegral n ==> do
                     let s = applyN n (slotSucc sps <$>)
-                    let p = applyN n (slotPred sps =<<)
+                    let p = applyN n (slotPred =<<)
                     Just slot === (s . p) (Just slot)
 
         it "(applyN n slotPred) . (applyN n slotSucc) == id" $
             withMaxSuccess 1000 $ property $
                 \(sps, slot) (NonNegative (n :: Int)) -> do
                     let s = applyN n (slotSucc sps <$>)
-                    let p = applyN n (slotPred sps =<<)
+                    let p = applyN n (slotPred =<<)
                     Just slot === (p . s) (Just slot)
 
         it "slotDifference (applyN n slotSucc slot) slot == \
@@ -397,20 +397,20 @@ spec = do
         it "slotDifference slot (applyN n slotPred slot) == \
             \n (valid difference)" $
             withMaxSuccess 1000 $ property $
-                \(sps, slot) (NonNegative (n :: Int)) ->
+                \slot (NonNegative (n :: Int)) ->
                     getSlotId slot >= fromIntegral n ==>
                     Just (Quantity (fromIntegral n)) ===
                         (slotDifference slot <$>
-                            applyN n (slotPred sps =<<) (Just slot))
+                            applyN n (slotPred =<<) (Just slot))
 
         it "slotDifference (applyN n slotPred slot) slot == \
             \0 (invalid difference)" $
             withMaxSuccess 1000 $ property $
-                \(sps, slot) (NonNegative (n :: Int)) ->
+                \slot (NonNegative (n :: Int)) ->
                     getSlotId slot >= fromIntegral n ==>
                     Just (Quantity 0) ===
                         (flip slotDifference slot <$>
-                            applyN n (slotPred sps =<<) (Just slot))
+                            applyN n (slotPred =<<) (Just slot))
 
         it "slotDifference slot (applyN n slotSucc slot) == \
             \0 (invalid difference)" $
@@ -450,7 +450,7 @@ spec = do
         it "slotPred . slotCeiling . utcTimeSucc . slotStartTime == id" $
             withMaxSuccess 1000 $ property $
                 \(sps, slot) -> do
-                    let f = slotPred sps
+                    let f = slotPred
                             . slotCeiling sps
                             . utcTimeSucc
                             . slotStartTime sps
@@ -473,7 +473,7 @@ spec = do
                     upperBoundSucc = mapRangeUpperBound slotSucc'
 
                     slotPred' :: SlotId -> SlotId
-                    slotPred' s = fromMaybe minBound $ slotPred sps s
+                    slotPred' s = fromMaybe minBound $ slotPred s
 
                     slotSucc' :: SlotId -> SlotId
                     slotSucc' = slotSucc sps

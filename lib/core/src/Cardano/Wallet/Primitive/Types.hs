@@ -1015,8 +1015,8 @@ slotDifference a b
     b' = getSlotId b
 
 -- | Return the slot immediately before the given slot.
-slotPred :: SlotParameters -> SlotId -> Maybe SlotId
-slotPred _ (SlotId s)
+slotPred :: SlotId -> Maybe SlotId
+slotPred (SlotId s)
     | s > 0 = Just $ SlotId $ s - 1
     | otherwise = Nothing
 
