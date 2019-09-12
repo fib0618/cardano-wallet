@@ -1006,8 +1006,8 @@ slotRatio (SlotId n0) (SlotId n1) =
 
 -- | @slotDifference a b@ is how many slots @a@ is after @b@. The result is
 -- non-negative, and if @b > a@ then this function returns zero.
-slotDifference :: SlotParameters -> SlotId -> SlotId -> Quantity "slot" Natural
-slotDifference _ a b
+slotDifference :: SlotId -> SlotId -> Quantity "slot" Natural
+slotDifference a b
     | a' > b' = Quantity $ fromIntegral $ a' - b'
     | otherwise = Quantity 0
   where

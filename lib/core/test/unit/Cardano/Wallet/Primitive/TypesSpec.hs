@@ -392,7 +392,7 @@ spec = do
             withMaxSuccess 1000 $ property $
                 \(sps, slot) (NonNegative (n :: Int)) ->
                     Quantity (fromIntegral n) ===
-                        slotDifference sps (applyN n (slotSucc sps) slot) slot
+                        slotDifference (applyN n (slotSucc sps) slot) slot
 
         it "slotDifference slot (applyN n slotPred slot) == \
             \n (valid difference)" $
@@ -400,7 +400,7 @@ spec = do
                 \(sps, slot) (NonNegative (n :: Int)) ->
                     getSlotId slot >= fromIntegral n ==>
                     Just (Quantity (fromIntegral n)) ===
-                        (slotDifference sps slot <$>
+                        (slotDifference slot <$>
                             applyN n (slotPred sps =<<) (Just slot))
 
         it "slotDifference (applyN n slotPred slot) slot == \
@@ -409,7 +409,7 @@ spec = do
                 \(sps, slot) (NonNegative (n :: Int)) ->
                     getSlotId slot >= fromIntegral n ==>
                     Just (Quantity 0) ===
-                        (flip (slotDifference sps) slot <$>
+                        (flip slotDifference slot <$>
                             applyN n (slotPred sps =<<) (Just slot))
 
         it "slotDifference slot (applyN n slotSucc slot) == \
@@ -417,7 +417,7 @@ spec = do
             withMaxSuccess 1000 $ property $
                 \(sps, slot) (NonNegative (n :: Int)) ->
                     Quantity 0 ===
-                        slotDifference sps slot (applyN n (slotSucc sps) slot)
+                        slotDifference slot (applyN n (slotSucc sps) slot)
 
         it "slotAt . slotStartTime == id" $
             withMaxSuccess 1000 $ property $

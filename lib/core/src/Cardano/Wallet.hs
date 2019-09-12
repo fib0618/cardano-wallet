@@ -1118,7 +1118,7 @@ listTransactions ctx wid mStart mEnd order = do
             , txInfoOutputs = W.outputs @t tx
             , txInfoMeta = meta
             , txInfoDepth =
-                slotDifference sp tip (meta ^. #slotId)
+                slotDifference tip (meta ^. #slotId)
             , txInfoTime = txTime (meta ^. #slotId)
             }
         txOuts = Map.fromList
