@@ -185,7 +185,7 @@ spec = do
 
     describe "slotRatio" $ do
         it "works for any two slots" $ property $ \sl0 sl1 ->
-            slotRatio slotsPerEpoch sl0 sl1 `deepseq` ()
+            slotRatio sl0 sl1 `deepseq` ()
 
     describe "conversion between SlotId and EpochSlotId" $ do
         it "slotIdToEpochSlotId . epochSlotIdToSlotId == id" $ property $ \s ->

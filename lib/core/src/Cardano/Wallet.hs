@@ -795,7 +795,7 @@ restoreBlocks ctx wid blocks (nodeTip, Quantity nodeHeight) = do
         let calculateMetadata :: SlotId -> WalletMetadata
             calculateMetadata slot = meta { status = status' }
               where
-                progress' = slotRatio epochLength slot nodeTip
+                progress' = slotRatio slot nodeTip
                 status' =
                     if progress' == maxBound
                     then Ready
@@ -839,7 +839,6 @@ restoreBlocks ctx wid blocks (nodeTip, Quantity nodeHeight) = do
     bp = ctx ^. blockchainParameters @t
     db = ctx ^. dbLayer @s @t @k
     tr = ctx ^. logger
-    epochLength = bp ^. #getEpochLength
     epochStability = bp ^. #getEpochStability
 
 {-------------------------------------------------------------------------------

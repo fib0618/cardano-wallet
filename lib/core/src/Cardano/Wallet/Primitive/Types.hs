@@ -991,13 +991,12 @@ data SlotParameters = SlotParameters
 -- approximation for a few reasons, one of them being that we hard code the
 -- epoch length as a static number whereas it may vary in practice.
 slotRatio
-    :: EpochLength
-    -> SlotId
+    :: SlotId
         -- ^ Numerator
     -> SlotId
         -- ^ Denominator
     -> Quantity "percent" Percentage
-slotRatio _ (SlotId n0) (SlotId n1) =
+slotRatio (SlotId n0) (SlotId n1) =
     if distance n0 n1 < tolerance || n0 >= n1 then
         maxBound
     else
