@@ -374,25 +374,25 @@ spec = do
 
         it "(applyN n slotSucc) . (applyN n slotPred) == id" $
             withMaxSuccess 1000 $ property $
-                \(sps, slot) (NonNegative (n :: Int)) ->
+                \slot (NonNegative (n :: Int)) ->
                     getSlotId slot >= fromIntegral n ==> do
-                    let s = applyN n (slotSucc sps <$>)
+                    let s = applyN n (slotSucc <$>)
                     let p = applyN n (slotPred =<<)
                     Just slot === (s . p) (Just slot)
 
         it "(applyN n slotPred) . (applyN n slotSucc) == id" $
             withMaxSuccess 1000 $ property $
-                \(sps, slot) (NonNegative (n :: Int)) -> do
-                    let s = applyN n (slotSucc sps <$>)
+                \slot (NonNegative (n :: Int)) -> do
+                    let s = applyN n (slotSucc <$>)
                     let p = applyN n (slotPred =<<)
                     Just slot === (p . s) (Just slot)
 
         it "slotDifference (applyN n slotSucc slot) slot == \
             \n (valid difference)" $
             withMaxSuccess 1000 $ property $
-                \(sps, slot) (NonNegative (n :: Int)) ->
+                \slot (NonNegative (n :: Int)) ->
                     Quantity (fromIntegral n) ===
-                        slotDifference (applyN n (slotSucc sps) slot) slot
+                        slotDifference (applyN n slotSucc slot) slot
 
         it "slotDifference slot (applyN n slotPred slot) == \
             \n (valid difference)" $
@@ -415,9 +415,9 @@ spec = do
         it "slotDifference slot (applyN n slotSucc slot) == \
             \0 (invalid difference)" $
             withMaxSuccess 1000 $ property $
-                \(sps, slot) (NonNegative (n :: Int)) ->
+                \slot (NonNegative (n :: Int)) ->
                     Quantity 0 ===
-                        slotDifference slot (applyN n (slotSucc sps) slot)
+                        slotDifference slot (applyN n slotSucc slot)
 
         it "slotAt . slotStartTime == id" $
             withMaxSuccess 1000 $ property $
@@ -441,7 +441,7 @@ spec = do
             \slotSucc . slotFloor . utcTimePred . slotStartTime == id" $
             withMaxSuccess 1000 $ property $
                 \(sps, slot) -> slot > minBound ==> do
-                    let f = fmap (slotSucc sps)
+                    let f = fmap slotSucc
                             . slotFloor sps
                             . utcTimePred
                             . slotStartTime sps
@@ -476,7 +476,7 @@ spec = do
                     slotPred' s = fromMaybe minBound $ slotPred s
 
                     slotSucc' :: SlotId -> SlotId
-                    slotSucc' = slotSucc sps
+                    slotSucc' = slotSucc
                 in
                 checkCoverage $
                 cover 20 (isNothing maybeSlotRange)

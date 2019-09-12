@@ -1021,8 +1021,8 @@ slotPred (SlotId s)
     | otherwise = Nothing
 
 -- | Return the slot immediately after the given slot.
-slotSucc :: SlotParameters -> SlotId -> SlotId
-slotSucc _ (SlotId s) = SlotId $ s + 1
+slotSucc :: SlotId -> SlotId
+slotSucc (SlotId s) = SlotId $ s + 1
 
 -- | The time that a slot begins.
 slotStartTime :: SlotParameters -> SlotId -> UTCTime
