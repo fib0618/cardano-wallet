@@ -20,6 +20,7 @@ module Cardano.Wallet.HttpBridge.Compatibility
       HttpBridge
     , Network (..)
     , block0
+    , byronEpochLength
     , byronFeePolicy
     , byronSlotLength
     , byronTxMaxSize
@@ -180,6 +181,10 @@ block0 = Block
     , transactions = []
     }
 
+-- | Hard-coded epoch length
+byronEpochLength :: EpochLength
+byronEpochLength = EpochLength 21600
+
 -- | Hard-coded fee policy for Cardano on Byron
 byronFeePolicy :: FeePolicy
 byronFeePolicy = LinearFee (Quantity 155381) (Quantity 43.946)
@@ -203,6 +208,6 @@ byronBlockchainParameters = BlockchainParameters
     , getFeePolicy = byronFeePolicy
     , getSlotLength = byronSlotLength
     , getTxMaxSize = byronTxMaxSize
-    , getEpochLength = EpochLength 21600
+    , getEpochLength = byronEpochLength
     , getEpochStability = Quantity 2160
     }
