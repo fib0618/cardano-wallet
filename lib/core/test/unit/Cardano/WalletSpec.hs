@@ -418,7 +418,7 @@ setupFixture (wid, wname, wstate) = do
         , getTxMaxSize = Quantity 8192
         , getEpochStability = Quantity 2160
         }
-    sps = SlotParameters {getEpochLength, getSlotLength, getGenesisBlockDate}
+    sps = SlotParameters {getSlotLength, getGenesisBlockDate}
     getGenesisBlockDate = StartTime $ posixSecondsToUTCTime 0
     getEpochLength = EpochLength 21600
     getSlotLength = SlotLength 1

@@ -917,5 +917,5 @@ instance Arbitrary EpochLength where
     arbitrary = EpochLength . getNonZero <$> arbitrary
 
 instance Arbitrary SlotParameters where
-    arbitrary = SlotParameters <$> arbitrary <*> arbitrary <*> arbitrary
+    arbitrary = SlotParameters <$> arbitrary <*> arbitrary
     shrink = genericShrink

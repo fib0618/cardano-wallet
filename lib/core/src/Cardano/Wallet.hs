@@ -1137,7 +1137,6 @@ listTransactions ctx wid mStart mEnd order = do
 
     sp :: SlotParameters
     sp = SlotParameters
-        (bp ^. #getEpochLength)
         (bp ^. #getSlotLength)
         (bp ^. #getGenesisBlockDate)
 

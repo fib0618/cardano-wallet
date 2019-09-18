@@ -979,9 +979,7 @@ epochSlotIdToSlotId (EpochLength epochLength) (EpochSlotId e s) = SlotId $
 
 -- | The essential parameters necessary for performing slot arithmetic.
 data SlotParameters = SlotParameters
-    { getEpochLength
-        :: EpochLength
-    , getSlotLength
+    { getSlotLength
         :: SlotLength
     , getGenesisBlockDate
         :: StartTime
@@ -1026,7 +1024,7 @@ slotSucc (SlotId s) = SlotId $ s + 1
 
 -- | The time that a slot begins.
 slotStartTime :: SlotParameters -> SlotId -> UTCTime
-slotStartTime (SlotParameters _ (SlotLength sl) (StartTime st)) slot =
+slotStartTime (SlotParameters (SlotLength sl) (StartTime st)) slot =
     addUTCTime offset st
   where
     offset = sl * fromIntegral (getSlotId slot)
@@ -1034,7 +1032,7 @@ slotStartTime (SlotParameters _ (SlotLength sl) (StartTime st)) slot =
 -- | For the given time 't', determine the ID of the earliest slot with start
 --   time 's' such that 't ≤ s'.
 slotCeiling :: SlotParameters -> UTCTime -> SlotId
-slotCeiling sp@(SlotParameters _ (SlotLength sl) _) t =
+slotCeiling sp@(SlotParameters (SlotLength sl) _) t =
     fromMaybe minBound $ slotAt sp (addUTCTime (pred sl) t)
 
 -- | For the given time 't', determine the ID of the latest slot with start
@@ -1045,7 +1043,7 @@ slotFloor = slotAt
 -- | For the given time 't', determine the ID of the unique slot with start
 --   time 's' and end time 'e' such that 's ≤ t ≤ e'.
 slotAt :: SlotParameters -> UTCTime -> Maybe SlotId
-slotAt (SlotParameters _ (SlotLength sl) (StartTime st)) t
+slotAt (SlotParameters (SlotLength sl) (StartTime st)) t
     | t < st = Nothing
     | otherwise = Just $ SlotId $ floor ((t `diffUTCTime` st) / sl)
 
