@@ -72,24 +72,30 @@ module Cardano.Wallet.Primitive.Types
     , computeUtxoStatistics
     , log10
 
-    -- * Slotting
-    , EpochSlotId (..)
+    -- * Slot Identifiers
     , SlotId (..)
-    , SlotParameters (..)
-    , SlotLength (..)
-    , EpochLength (..)
-    , StartTime (..)
-    , slotRatio
+    , EpochSlotId (..)
+
+    -- * Slot Identifier Conversion
     , epochSlotIdToSlotId
     , slotIdToEpochSlotId
-    , slotStartTime
-    , slotCeiling
-    , slotFloor
+
+    -- * Slot Arithmetic Types
+    , EpochLength (..)
+    , SlotLength (..)
+    , SlotParameters (..)
+    , StartTime (..)
+
+    -- * Slot Arithmetic Functions
     , slotAt
+    , slotCeiling
     , slotDifference
+    , slotFloor
     , slotPred
-    , slotSucc
     , slotRangeFromTimeRange
+    , slotRatio
+    , slotStartTime
+    , slotSucc
 
     -- * Wallet Metadata
     , WalletMetadata(..)
