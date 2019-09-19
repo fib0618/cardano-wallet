@@ -187,16 +187,17 @@ getBlockHeader = label "getBlockHeader" $
         -- 2. BFT
         -- 3. Praos / Genesis
         --
-        -- We could make sure we get the right kind of proof, but we don't need to.
-        -- Just checking that the length is not totally wrong, is much simpler
-        -- and gives us sanity about the binary format being correct.
+        -- We could make sure we get the right kind of proof, but we don't need
+        -- to. Just checking that the length is not totally wrong, is much
+        -- simpler and gives us sanity about the binary format being correct.
         read' <- fromIntegral <$> bytesRead
         let remaining = size - read'
         case remaining of
             0 -> skip remaining -- no proof
             96 -> skip remaining -- BFT
             612 -> skip remaining -- Praos/Genesis
-            _ -> fail $ "BlockHeader proof has unexpected size " <> (show remaining)
+            _ -> fail $
+                "BlockHeader proof has unexpected size " <> (show remaining)
         return $ BlockHeader
             { version
             , contentSize

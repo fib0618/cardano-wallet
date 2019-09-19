@@ -316,7 +316,8 @@ spec = do
                         $ putSignedTx inps outs wits
                 let encodedSignedTx = BL.toStrict $ encodeWrongly signedTx
                 decodeSignedTx tl encodedSignedTx `shouldBe`
-                    (Left $ ErrDecodeSignedTxWrongPayload "wrongly constructed binary blob")
+                    (Left $ ErrDecodeSignedTxWrongPayload
+                        "wrongly constructed binary blob")
   where
     second :: Int
     second = 1000000

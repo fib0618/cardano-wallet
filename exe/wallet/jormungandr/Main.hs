@@ -331,14 +331,15 @@ cmdServe = command "serve" $ info (helper <*> cmd) $ mempty
             waitForService "Jörmungandr" (sb, tracer) nodePort $
                 waitForConnection nl defaultRetryPolicy
             blockchainParams <-
-                runExceptT (getInitialBlockchainParameters jor (coerce block0H)) >>= \case
-                Right a -> return a
-                Left (ErrGetBlockchainParamsNetworkUnreachable _) ->
-                    handleNetworkUnreachable tracer
-                Left (ErrGetBlockchainParamsGenesisNotFound _) ->
-                    handleGenesisNotFound (sb, tracer)
-                Left (ErrGetBlockchainParamsIncompleteParams _) ->
-                    handleNoInitialPolicy tracer
+                runExceptT (getInitialBlockchainParameters jor (coerce block0H))
+                    >>= \case
+                        Right a -> return a
+                        Left (ErrGetBlockchainParamsNetworkUnreachable _) ->
+                            handleNetworkUnreachable tracer
+                        Left (ErrGetBlockchainParamsGenesisNotFound _) ->
+                            handleGenesisNotFound (sb, tracer)
+                        Left (ErrGetBlockchainParamsIncompleteParams _) ->
+                            handleNoInitialPolicy tracer
             return (nl, blockchainParams)
 
         withDBLayer

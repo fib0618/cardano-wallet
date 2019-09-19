@@ -315,7 +315,10 @@ updateUnstableBlocks k getTipId' getBlockHeader lbhs = do
         -- ^ Accumulator for number of blocks fetched
         -> Hash "BlockHeader"
         -- ^ Starting point for block fetch
-        -> m (UnstableBlocks, [(Hash "BlockHeader", BlockHeader, Quantity "block" Natural)])
+        -> m
+            ( UnstableBlocks
+            , [(Hash "BlockHeader", BlockHeader, Quantity "block" Natural)]
+            )
     fetchBackwards ubs ac len t = do
         (tipHeader, tipHeight) <- getBlockHeader t
         -- Push the remote block.
@@ -325,7 +328,8 @@ updateUnstableBlocks k getTipId' getBlockHeader lbhs = do
         -- If remote blocks have met local blocks, or if more than k have been
         -- fetched, or we are at the genesis, then stop.
         -- Otherwise, continue from the parent of the current tip.
-        let intersected = unstableBlocksTipId ubs' == Just (prevBlockHash tipHeader)
+        let intersected =
+                unstableBlocksTipId ubs' == Just (prevBlockHash tipHeader)
         let bufferFull = len + 1 >= k
         let atGenesis = slotId tipHeader == SlotId 0 0
         if intersected || bufferFull || atGenesis
@@ -460,13 +464,17 @@ mkJormungandrLayer mgr baseUrl = JormungandrLayer
                 left ErrPostTxNetworkUnreachable <$> defaultHandler ctx x
 
     , getInitialBlockchainParameters = \block0 -> do
-        jblock@(J.Block _ msgs) <- ExceptT $ run (cGetBlock (BlockId $ coerce block0)) >>= \case
-            Left (FailureResponse e) | responseStatusCode e == status400 ->
-                return . Left . ErrGetBlockchainParamsGenesisNotFound $ block0
-            x -> do
-                let ctx = safeLink api (Proxy @GetBlock) (BlockId $ coerce block0)
-                let networkUnreachable = ErrGetBlockchainParamsNetworkUnreachable
-                left networkUnreachable <$> defaultHandler ctx x
+        jblock@(J.Block _ msgs) <-
+            ExceptT $ run (cGetBlock (BlockId $ coerce block0)) >>= \case
+                Left (FailureResponse e) | responseStatusCode e == status400 ->
+                    return . Left . ErrGetBlockchainParamsGenesisNotFound $
+                        block0
+                x -> do
+                    let ctx = safeLink
+                            api (Proxy @GetBlock) (BlockId $ coerce block0)
+                    let networkUnreachable =
+                            ErrGetBlockchainParamsNetworkUnreachable
+                    left networkUnreachable <$> defaultHandler ctx x
 
         let params = mconcat $ mapMaybe getConfigParameters msgs
               where
