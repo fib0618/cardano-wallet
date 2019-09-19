@@ -119,7 +119,7 @@ import Data.Set
 import Data.TreeDiff
     ( ToExpr (..), defaultExprViaShow )
 import Data.Word
-    ( Word32 )
+    ( Word64 )
 import GHC.Generics
     ( Generic )
 import System.Random
@@ -481,11 +481,9 @@ generator (Model _ wids) = Just $ frequency $ fmap (fmap At) <$> concat
         genSId :: Gen (Maybe SlotId)
         genSId = QC.oneof
             [ return Nothing
-            , Just <$> (SlotId <$> genWord32 <*> arbitrary)
+            , Just <$> (SlotId <$> genWord64)
             ]
-        -- FIXME: There's currently an artifical boundary on ~48 bits for the
-        -- Sqlite storage of the SlotId's epochNumber.
-        genWord32 = fromIntegral <$> arbitrary @Word32
+        genWord64 = fromIntegral <$> arbitrary @Word64
 
 isUnordered :: Ord x => [x] -> Bool
 isUnordered xs = xs /= L.sort xs

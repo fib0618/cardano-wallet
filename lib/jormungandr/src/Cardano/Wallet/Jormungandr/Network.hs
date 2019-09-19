@@ -75,11 +75,14 @@ import Cardano.Wallet.Network
 import Cardano.Wallet.Primitive.Types
     ( Block (..)
     , BlockHeader (..)
+    , EpochLength (..)
     , Hash (..)
     , SlotId (..)
     , SlotLength (..)
     , TxWitness (..)
     )
+import Cardano.Wallet.Unsafe
+    ( unsafeRunExceptT )
 import Control.Arrow
     ( left )
 import Control.Concurrent.MVar
@@ -149,28 +152,33 @@ import qualified Data.Text.Encoding as T
 newNetworkLayer
     :: forall n. ()
     => BaseUrl
+    -> Hash "Genesis"
     -> IO (NetworkLayer (Jormungandr n) IO)
-newNetworkLayer = fmap snd . newNetworkLayer'
+newNetworkLayer url genesisHash = snd <$> newNetworkLayer' url genesisHash
 
 -- | Creates a new 'NetworkLayer' connecting to an underlying 'Jormungandr'
 -- backend target. Also returns the internal 'JormungandrLayer' component.
 newNetworkLayer'
     :: forall n. ()
     => BaseUrl
+    -> Hash "Genesis"
     -> IO (JormungandrLayer n IO, NetworkLayer (Jormungandr n) IO)
-newNetworkLayer' url = do
+newNetworkLayer' url genesisHash = do
     mgr <- newManager defaultManagerSettings
     st <- newMVar emptyUnstableBlocks
     let jor = mkJormungandrLayer @n mgr url
-    return (jor, mkNetworkLayer st jor)
+    params <- unsafeRunExceptT $
+        getInitialBlockchainParameters jor genesisHash
+    return (jor, mkNetworkLayer st jor (getEpochLength params))
 
 -- | Wrap a Jormungandr client into a 'NetworkLayer' common interface.
 mkNetworkLayer
     :: MonadBaseControl IO m
     => MVar UnstableBlocks
     -> JormungandrLayer n m
+    -> EpochLength
     -> NetworkLayer (Jormungandr n) m
-mkNetworkLayer st j = NetworkLayer
+mkNetworkLayer st j el = NetworkLayer
     { networkTip = modifyMVar st $ \bs -> do
         bs' <- updateUnstableBlocks k getTipId' getBlockHeader bs
         ExceptT . pure $ case unstableBlocksTip bs' of
@@ -188,7 +196,7 @@ mkNetworkLayer st j = NetworkLayer
                 ErrGetBlockNetworkUnreachable e
             ErrGetDescendantsParentNotFound _ ->
                 ErrGetBlockNotFound (prevBlockHash tip)
-        forM ids (fmap coerceBlock . getBlock j)
+        forM ids (fmap (coerceBlock el) . getBlock j)
 
     , postTx = postMessage j
     }
@@ -203,7 +211,7 @@ mkNetworkLayer st j = NetworkLayer
     getBlockHeader t = do
         blk@(J.Block blkHeader _) <- getBlock' t
         let nodeHeight = Quantity $ fromIntegral $ J.chainLength blkHeader
-        pure (header (coerceBlock blk), nodeHeight)
+        pure (header (coerceBlock el blk), nodeHeight)
 
     mappingError = flip withExceptT
 
@@ -331,7 +339,7 @@ updateUnstableBlocks k getTipId' getBlockHeader lbhs = do
         let intersected =
                 unstableBlocksTipId ubs' == Just (prevBlockHash tipHeader)
         let bufferFull = len + 1 >= k
-        let atGenesis = slotId tipHeader == SlotId 0 0
+        let atGenesis = slotId tipHeader == SlotId 0
         if intersected || bufferFull || atGenesis
             then pure (ubs', ac')
             else fetchBackwards ubs' ac' (len + 1) (prevBlockHash tipHeader)
@@ -515,7 +523,7 @@ mkJormungandrLayer mgr baseUrl = JormungandrLayer
         case (mpolicy, mduration, mblock0Date, mepochLength, mStability) of
             ([policy],[duration],[block0Date], [epochLength], [stability]) ->
                 return $ BlockchainParameters
-                    { getGenesisBlock = coerceBlock jblock
+                    { getGenesisBlock = coerceBlock epochLength jblock
                     , getGenesisBlockDate = block0Date
                     , getFeePolicy = policy
                     , getEpochLength = epochLength

@@ -195,7 +195,7 @@ newNetworkLayer
     -> Hash "Genesis"
     -> IO (NetworkLayer (Jormungandr n) IO, BlockchainParameters (Jormungandr n))
 newNetworkLayer url block0 = do
-    (jormungandr, nl) <- Jormungandr.newNetworkLayer' url
+    (jormungandr, nl) <- Jormungandr.newNetworkLayer' url block0H
     waitForConnection nl defaultRetryPolicy
     blockchainParams <- unsafeRunExceptT $
         getInitialBlockchainParameters jormungandr (coerce block0)

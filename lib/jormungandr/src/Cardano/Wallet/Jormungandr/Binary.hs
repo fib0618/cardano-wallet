@@ -80,11 +80,13 @@ import Cardano.Wallet.Primitive.Fee
 import Cardano.Wallet.Primitive.Types
     ( Address (..)
     , Coin (..)
+    , EpochLength
+    , EpochSlotId (..)
     , Hash (..)
-    , SlotId (..)
     , TxIn (..)
     , TxOut (..)
     , TxWitness (..)
+    , epochSlotIdToSlotId
     )
 import Cardano.Wallet.Transaction
     ( EstimateMaxNumberOfInputsParams (..) )
@@ -161,7 +163,7 @@ maxNumberOfOutputs = 255
 data BlockHeader = BlockHeader
     { version :: Word16
     , contentSize :: Word32
-    , slot :: SlotId
+    , slot :: EpochSlotId
     , chainLength :: Word32
     , contentHash :: Hash "content"
     , parentHeaderHash :: Hash "BlockHeader"
@@ -176,8 +178,8 @@ getBlockHeader = label "getBlockHeader" $
         -- Common structure.
         version <- getWord16be
         contentSize <- getWord32be
-        slotEpoch <- fromIntegral <$> getWord32be
-        slotId <- toEnum . fromEnum <$> getWord32be
+        epochNumber <- fromIntegral <$> getWord32be
+        slotNumber <- toEnum . fromEnum <$> getWord32be
         chainLength <- getWord32be
         contentHash <- Hash <$> getByteString 32 -- or 256 bits
         parentHeaderHash <- Hash <$> getByteString 32
@@ -201,7 +203,7 @@ getBlockHeader = label "getBlockHeader" $
         return $ BlockHeader
             { version
             , contentSize
-            , slot = SlotId { epochNumber = slotEpoch, slotNumber = slotId }
+            , slot = EpochSlotId { epochNumber, slotNumber }
             , chainLength
             , contentHash
             , parentHeaderHash
@@ -616,15 +618,16 @@ signData inps outs =
                                 Conversions
 -------------------------------------------------------------------------------}
 
-coerceBlock  :: Block -> W.Block Tx
-coerceBlock (Block h msgs) =
+coerceBlock  :: EpochLength -> Block -> W.Block Tx
+coerceBlock el (Block h msgs) =
     W.Block coerceHeader coerceMessages
   where
-    coerceHeader = W.BlockHeader (slot h) (parentHeaderHash h)
+    coerceHeader = W.BlockHeader (coerceSlotId $ slot h) (parentHeaderHash h)
     coerceMessages = msgs >>= \case
         Initial _ -> []
         Transaction (tx, _wits) -> return tx
         UnimplementedMessage _ -> []
+    coerceSlotId = epochSlotIdToSlotId el
 
 {-------------------------------------------------------------------------------
                               Legacy Decoders

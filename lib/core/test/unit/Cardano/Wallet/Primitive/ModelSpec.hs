@@ -34,6 +34,8 @@ import Cardano.Wallet.Primitive.Types
     , Coin (..)
     , Direction (..)
     , Dom (..)
+    , EpochLength (..)
+    , EpochSlotId (..)
     , Hash (..)
     , ShowFmt (..)
     , SlotId (..)
@@ -42,6 +44,7 @@ import Cardano.Wallet.Primitive.Types
     , TxOut (..)
     , UTxO (..)
     , balance
+    , epochSlotIdToSlotId
     , excluding
     , invariant
     , restrictedTo
@@ -343,8 +346,11 @@ addresses = map address
     $ concatMap transactions
     blockchain
 
+testEpochLength :: EpochLength
+testEpochLength = EpochLength 21600
+
 testSlotId :: Word64 -> Word16 -> SlotId
-testSlotId = SlotId
+testSlotId en sn = epochSlotIdToSlotId testEpochLength $ EpochSlotId en sn
 
 -- A excerpt of mainnet, epoch #14, first 20 blocks; plus a few previous blocks
 -- which contains transactions referred to in the former. This is useful to test

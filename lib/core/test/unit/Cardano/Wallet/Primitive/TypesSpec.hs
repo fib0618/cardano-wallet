@@ -30,6 +30,7 @@ import Cardano.Wallet.Primitive.Types
     , Direction (..)
     , Dom (..)
     , EpochLength (..)
+    , EpochSlotId (..)
     , Hash (..)
     , HistogramBar (..)
     , Range (..)
@@ -49,9 +50,8 @@ import Cardano.Wallet.Primitive.Types
     , WalletName (..)
     , balance
     , computeUtxoStatistics
+    , epochSlotIdToSlotId
     , excluding
-    , flatSlot
-    , fromFlatSlot
     , isAfterRange
     , isBeforeRange
     , isSubrangeOf
@@ -73,6 +73,7 @@ import Cardano.Wallet.Primitive.Types
     , slotCeiling
     , slotDifference
     , slotFloor
+    , slotIdToEpochSlotId
     , slotMinBound
     , slotPred
     , slotRangeFromTimeRange
@@ -171,26 +172,31 @@ spec = do
             let wid = WalletId $ digest $ publicKey xprv
             "336c96f1...b8cac9ce" === pretty @_ @Text wid
         it "TxMeta (1)" $ do
-            let txMeta = TxMeta Pending Outgoing (SlotId 14 42) (Quantity 1337)
-            "-0.001337 pending since 14.42" === pretty @_ @Text txMeta
+            let txMeta = TxMeta Pending Outgoing (SlotId 14) (Quantity 1337)
+            "-0.001337 pending since 14" === pretty @_ @Text txMeta
         it "TxMeta (2)" $ do
             let txMeta =
-                    TxMeta InLedger Incoming (SlotId 14 0) (Quantity 13371442)
-            "+13.371442 in ledger since 14.0" === pretty @_ @Text txMeta
+                    TxMeta InLedger Incoming (SlotId 14) (Quantity 13371442)
+            "+13.371442 in ledger since 14" === pretty @_ @Text txMeta
         it "TxMeta (3)" $ do
-            let txMeta = TxMeta Invalidated Incoming (SlotId 0 42) (Quantity 0)
-            "+0.000000 invalidated since 0.42" === pretty @_ @Text txMeta
+            let txMeta = TxMeta Invalidated Incoming (SlotId 0) (Quantity 0)
+            "+0.000000 invalidated since 0" === pretty @_ @Text txMeta
 
     let slotsPerEpoch = EpochLength 21600
 
     describe "slotRatio" $ do
         it "works for any two slots" $ property $ \sl0 sl1 ->
             slotRatio slotsPerEpoch sl0 sl1 `deepseq` ()
-    describe "flatSlot" $ do
-        it "flatSlot . fromFlatSlot == id" $ property $ \sl ->
-            fromFlatSlot slotsPerEpoch (flatSlot slotsPerEpoch sl) === sl
-        it "fromFlatSlot . flatSlot == id" $ property $ \n ->
-            flatSlot slotsPerEpoch (fromFlatSlot slotsPerEpoch n) === n
+
+    describe "conversion between SlotId and EpochSlotId" $ do
+        it "slotIdToEpochSlotId . epochSlotIdToSlotId == id" $ property $ \s ->
+            slotIdToEpochSlotId slotsPerEpoch
+                (epochSlotIdToSlotId slotsPerEpoch s)
+                    === s
+        it "epochSlotIdToSlotId . slotIdToEpochSlotId == id" $ property $ \s ->
+            epochSlotIdToSlotId slotsPerEpoch
+                (slotIdToEpochSlotId slotsPerEpoch s)
+                    === s
 
     describe "Ranges" $ do
 
@@ -354,23 +360,23 @@ spec = do
                 slotStartTime sps slotMinBound `isAfterRange` r' ==>
                     isNothing (slotRangeFromTimeRange sps r')
 
-        it "applyN (flatSlot slot) slotPred slot == Just slotMinBound" $
+        it "applyN slot slotPred slot == Just slotMinBound" $
             withMaxSuccess 10 $ property $
                 \(sps, slot) -> do
-                    let n = flatSlot (getEpochLength sps) slot
+                    let n = getSlotId slot
                     Just slotMinBound ===
                         applyN n (slotPred sps =<<) (Just slot)
 
-        it "applyN (flatSlot slot + 1) slotPred slot == Nothing" $
+        it "applyN (slot + 1) slotPred slot == Nothing" $
             withMaxSuccess 10 $ property $
                 \(sps, slot) -> do
-                    let n = flatSlot (getEpochLength sps) slot + 1
+                    let n = getSlotId slot + 1
                     Nothing === applyN n (slotPred sps =<<) (Just slot)
 
         it "(applyN n slotSucc) . (applyN n slotPred) == id" $
             withMaxSuccess 1000 $ property $
                 \(sps, slot) (NonNegative (n :: Int)) ->
-                    flatSlot (getEpochLength sps) slot >= fromIntegral n ==> do
+                    getSlotId slot >= fromIntegral n ==> do
                     let s = applyN n (slotSucc sps <$>)
                     let p = applyN n (slotPred sps =<<)
                     Just slot === (s . p) (Just slot)
@@ -393,7 +399,7 @@ spec = do
             \n (valid difference)" $
             withMaxSuccess 1000 $ property $
                 \(sps, slot) (NonNegative (n :: Int)) ->
-                    flatSlot (getEpochLength sps) slot >= fromIntegral n ==>
+                    getSlotId slot >= fromIntegral n ==>
                     Just (Quantity (fromIntegral n)) ===
                         (slotDifference sps slot <$>
                             applyN n (slotPred sps =<<) (Just slot))
@@ -402,7 +408,7 @@ spec = do
             \0 (invalid difference)" $
             withMaxSuccess 1000 $ property $
                 \(sps, slot) (NonNegative (n :: Int)) ->
-                    flatSlot (getEpochLength sps) slot >= fromIntegral n ==>
+                    getSlotId slot >= fromIntegral n ==>
                     Just (Quantity 0) ===
                         (flip (slotDifference sps) slot <$>
                             applyN n (slotPred sps =<<) (Just slot))
@@ -571,12 +577,15 @@ spec = do
     describe "Slotting ordering" $ do
         it "Any Slot >= slotMinBound"
             (property (>= slotMinBound))
-        it "SlotId 1 2 < SlotId 2 1"
-            (property $ SlotId { epochNumber = 1, slotNumber = 2 } < SlotId 2 1)
-        it "SlotId 1 1 < SlotId 1 2"
-            (property $ SlotId { epochNumber = 1, slotNumber = 1 } < SlotId 1 2)
-        it "SlotId 1 2 < SlotId 2 2"
-            (property $ SlotId { epochNumber = 1, slotNumber = 2 } < SlotId 2 2)
+        it "EpochSlotId 1 2 < EpochSlotId 2 1"
+            (property $ EpochSlotId { epochNumber = 1, slotNumber = 2 }
+                < EpochSlotId 2 1)
+        it "EpochSlotId 1 1 < EpochSlotId 1 2"
+            (property $ EpochSlotId { epochNumber = 1, slotNumber = 1 }
+                < EpochSlotId 1 2)
+        it "EpochSlotId 1 2 < EpochSlotId 2 2"
+            (property $ EpochSlotId { epochNumber = 1, slotNumber = 2 }
+                < EpochSlotId 2 2)
 
     describe "UtxoStatistics" $ do
         it "total statistics == balance utxo"
@@ -859,12 +868,16 @@ instance Arbitrary BlockHeader where
             , pure $ Hash "BLOCK03"
             ]
 
-instance Arbitrary SlotId where
+instance Arbitrary EpochSlotId where
     shrink _ = []
     arbitrary = do
         ep <- choose (0, 10)
         sl <- choose (0, 100)
-        return (SlotId ep sl)
+        return (EpochSlotId ep sl)
+
+instance Arbitrary SlotId where
+    shrink _ = []
+    arbitrary = SlotId <$> choose (0, 1000)
 
 instance Arbitrary (Block Tx) where
     shrink (Block h txs) = Block h <$> shrink txs
@@ -907,28 +920,3 @@ instance Arbitrary EpochLength where
 instance Arbitrary SlotParameters where
     arbitrary = SlotParameters <$> arbitrary <*> arbitrary <*> arbitrary
     shrink = genericShrink
-
-instance {-# OVERLAPS #-} Arbitrary (SlotParameters, SlotId) where
-    arbitrary = do
-        (el, slot) <- arbitrary
-        sl <- arbitrary
-        st <- arbitrary
-        pure (SlotParameters el sl st, slot)
-    shrink (SlotParameters el sl st, slot) = do
-        (el', slot') <- shrink (el, slot)
-        pure (SlotParameters el' sl st, slot')
-
--- | Note, for functions which works with both an epoch length and a slot id,
--- we need to make sure that the 'slotNumber' doesn't exceed the epoch length,
--- otherwise, all computations get mixed up.
-instance {-# OVERLAPS #-} Arbitrary (EpochLength, SlotId) where
-    shrink (a,b) =
-        filter validSlotConfig $ zip (shrink a) (shrink b)
-      where
-        validSlotConfig (EpochLength ep, SlotId _ sl) = sl < ep
-
-    arbitrary = do
-        (EpochLength epochLength) <- arbitrary
-        ep <- choose (0, 1000)
-        sl <- choose (0, fromIntegral epochLength - 1)
-        return (EpochLength epochLength, SlotId ep sl)

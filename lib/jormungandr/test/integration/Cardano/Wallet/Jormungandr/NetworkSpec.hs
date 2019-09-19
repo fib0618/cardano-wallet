@@ -13,6 +13,8 @@ module Cardano.Wallet.Jormungandr.NetworkSpec
 
 import Prelude
 
+import Cardano.Faucet
+    ( block0H )
 import Cardano.Wallet.Jormungandr.Api
     ( GetTipId, api )
 import Cardano.Wallet.Jormungandr.Binary
@@ -42,11 +44,14 @@ import Cardano.Wallet.Primitive.Types
     ( Address (..)
     , BlockHeader (..)
     , Coin (..)
+    , EpochLength (..)
+    , EpochSlotId (..)
     , Hash (..)
     , SlotId (..)
     , TxIn (..)
     , TxOut (..)
     , TxWitness (..)
+    , epochSlotIdToSlotId
     , slotMinBound
     )
 import Cardano.Wallet.Transaction
@@ -171,7 +176,7 @@ spec = do
         let makeUnreachableNetworkLayer = do
                 port <- head <$> randomUnusedTCPPorts 1
                 let dummyUrl = BaseUrl Http "localhost" port "/api"
-                Jormungandr.newNetworkLayer dummyUrl
+                Jormungandr.newNetworkLayer dummyUrl block0H
 
         it "networkTip: ErrNetworkUnreachable" $ do
             nw <- makeUnreachableNetworkLayer
@@ -204,7 +209,7 @@ spec = do
         it "networkTip: throws on invalid url" $ do
             let test (_, _nw, url) = do
                     let wrongUrl = url { baseUrlPath = "/not-valid-prefix" }
-                    wrongNw <- Jormungandr.newNetworkLayer wrongUrl
+                    wrongNw <- Jormungandr.newNetworkLayer wrongUrl block0H
                     let io = void $ runExceptT $ networkTip wrongNw
                     shouldThrow io $ \(ErrUnexpectedNetworkFailure link _) ->
                         show link == show (safeLink api (Proxy @GetTipId))
@@ -327,7 +332,7 @@ spec = do
         -> IO (Async (), NetworkLayer (Jormungandr 'Testnet) IO, BaseUrl)
     startNode wait = do
         (handle, baseUrl, _) <- launchJormungandr Inherit
-        nw <- Jormungandr.newNetworkLayer baseUrl
+        nw <- Jormungandr.newNetworkLayer baseUrl block0H
         wait nw $> (handle, nw, baseUrl)
 
     killNode :: (Async (), a, BaseUrl) -> IO ()
@@ -481,5 +486,8 @@ shrinkFixedBS bs = [zeros | bs /= zeros]
 prependTag :: Int -> ByteString -> ByteString
 prependTag tag bs = BS.pack [fromIntegral tag] <> bs
 
+testEpochLength :: EpochLength
+testEpochLength = EpochLength 21600
+
 testSlotId :: Word64 -> Word16 -> SlotId
-testSlotId = SlotId
+testSlotId en sn = epochSlotIdToSlotId testEpochLength $ EpochSlotId en sn

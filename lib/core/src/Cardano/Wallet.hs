@@ -62,6 +62,7 @@ module Cardano.Wallet
     -- ** Wallet
     , attachPrivateKey
     , createWallet
+    , getBlockchainParameters
     , listUtxoStatistics
     , listWallets
     , readWallet
@@ -378,6 +379,9 @@ type family IsWalletCtx s t (k :: Depth -> * -> *) ctx :: Constraint
 
 type instance IsWalletCtx s t k (WalletLayer s0 t0 k0) =
     (s0 ~ s, t0 ~ t, k0 ~ k)
+
+getBlockchainParameters :: WalletLayer s t k -> BlockchainParameters t
+getBlockchainParameters (WalletLayer _ bps _ _ _ _) = bps
 
 -- | Create a new instance of the wallet layer.
 newWalletLayer

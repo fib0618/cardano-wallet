@@ -218,7 +218,7 @@ chainTip = initMay >=> lastMay
 
 -- | Slot index of the tip of a chain.
 chainEnd :: [BlockHeader] -> SlotId
-chainEnd = maybe (SlotId 0 0) slotId . chainTip
+chainEnd = maybe (SlotId 0) slotId . chainTip
 
 -- | Limit the sequence to a certain size by removing items from the beginning.
 limitChain :: Quantity "block" Natural -> [BlockHeader] -> [BlockHeader]
@@ -231,7 +231,7 @@ showChain bs = unwords (map showHeaderHash bs)
     showHeaderHash (BlockHeader _ (Hash h)) = B8.unpack h
 
 showSlot :: SlotId -> String
-showSlot (SlotId ep sl) = show ep ++ "." ++ show sl
+showSlot (SlotId sl) = show sl
 
 {-------------------------------------------------------------------------------
                      Test chain pure model of intersection
@@ -285,7 +285,7 @@ intersectionPoint localChain nodeChain = res >>= checkAfter
 spliceChains :: [BlockHeader] -> [BlockHeader] -> [BlockHeader]
 spliceChains localChain nodeChain = takeToSlot start chaff ++ localChain
   where
-    start = fromMaybe (SlotId 0 0) $ firstSlot localChain
+    start = fromMaybe (SlotId 0) $ firstSlot localChain
     -- chaff is the same shape as the node chain, but with different hashes
     chaff = [bh { prevBlockHash = Hash "x" } | bh <- nodeChain]
 
@@ -310,7 +310,7 @@ takeToSlot sl = takeWhile ((< sl) . slotId)
 -- is the penultimate block.
 chain :: String -> [BlockHeader]
 chain p =
-    [BlockHeader (SlotId 0 n) (Hash . B8.pack $ p ++ hash n) | n <- [1..]]
+    [BlockHeader (SlotId n) (Hash . B8.pack $ p ++ hash n) | n <- [1..]]
   where
     hash n = show (n - 1)
 
@@ -348,7 +348,7 @@ genChain (Quantity k) prefix = do
 instance Arbitrary TestCase where
     arbitrary = do
         k <- arbitrary
-        let genesis = BlockHeader (SlotId 0 0) (Hash "genesis")
+        let genesis = BlockHeader (SlotId 0) (Hash "genesis")
         base  <- genChain k "base"
         local <- genChain k "local"
         node  <- genChain k "node"
@@ -359,9 +359,9 @@ instance Arbitrary TestCase where
             , localChain = [genesis] <> base <> startFrom baseTip local
             }
       where
-        startFrom (SlotId ep n) xs =
-            [ BlockHeader (SlotId ep (sl+n)) prev
-            | BlockHeader (SlotId _ sl) prev <- xs
+        startFrom (SlotId n) xs =
+            [ BlockHeader (SlotId (sl + n)) prev
+            | BlockHeader (SlotId sl) prev <- xs
             ]
 
     shrink TestCase{..} =

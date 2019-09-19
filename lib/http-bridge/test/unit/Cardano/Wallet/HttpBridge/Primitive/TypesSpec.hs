@@ -6,6 +6,8 @@ module Cardano.Wallet.HttpBridge.Primitive.TypesSpec
 
 import Prelude
 
+import Cardano.Wallet.HttpBridge.Compatibility
+    ( byronEpochLength )
 import Cardano.Wallet.HttpBridge.Primitive.Types
     ( Tx (..) )
 import Cardano.Wallet.Primitive.Types
@@ -13,10 +15,12 @@ import Cardano.Wallet.Primitive.Types
     , Block (..)
     , BlockHeader (..)
     , Coin (..)
+    , EpochSlotId (..)
     , Hash (..)
     , SlotId (..)
     , TxIn (..)
     , TxOut (..)
+    , epochSlotIdToSlotId
     )
 import Data.Text
     ( Text )
@@ -64,4 +68,4 @@ spec = do
                 `shouldBe` pretty @_ @Text block
 
 testSlotId :: Word64 -> Word16 -> SlotId
-testSlotId = SlotId
+testSlotId en sn = epochSlotIdToSlotId byronEpochLength $ EpochSlotId en sn

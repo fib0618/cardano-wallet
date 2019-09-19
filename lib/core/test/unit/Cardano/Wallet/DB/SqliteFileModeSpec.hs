@@ -37,6 +37,8 @@ import Cardano.Wallet.Primitive.Types
     ( Address (..)
     , Coin (..)
     , Direction (..)
+    , EpochLength (..)
+    , EpochSlotId (..)
     , Hash (..)
     , SlotId (..)
     , SortOrder (..)
@@ -50,6 +52,7 @@ import Cardano.Wallet.Primitive.Types
     , WalletName (..)
     , WalletPassphraseInfo (..)
     , WalletState (..)
+    , epochSlotIdToSlotId
     , wholeRange
     )
 import Cardano.Wallet.Unsafe
@@ -319,5 +322,8 @@ testTxs =
       )
     ]
 
+testEpochLength :: EpochLength
+testEpochLength = EpochLength 21600
+
 testSlotId :: Word64 -> Word16 -> SlotId
-testSlotId = SlotId
+testSlotId en sn = epochSlotIdToSlotId testEpochLength $ EpochSlotId en sn
