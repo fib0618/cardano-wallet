@@ -178,7 +178,7 @@ spec = do
                     TxMeta InLedger Incoming (SlotId 14) (Quantity 13371442)
             "+13.371442 in ledger since 14" === pretty @_ @Text txMeta
         it "TxMeta (3)" $ do
-            let txMeta = TxMeta Invalidated Incoming (SlotId 0) (Quantity 0)
+            let txMeta = TxMeta Invalidated Incoming minBound (Quantity 0)
             "+0.000000 invalidated since 0" === pretty @_ @Text txMeta
 
     let slotsPerEpoch = EpochLength 21600

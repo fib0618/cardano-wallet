@@ -77,7 +77,6 @@ import Cardano.Wallet.Primitive.Types
     , BlockHeader (..)
     , EpochLength (..)
     , Hash (..)
-    , SlotId (..)
     , SlotLength (..)
     , TxWitness (..)
     )
@@ -339,7 +338,7 @@ updateUnstableBlocks k getTipId' getBlockHeader lbhs = do
         let intersected =
                 unstableBlocksTipId ubs' == Just (prevBlockHash tipHeader)
         let bufferFull = len + 1 >= k
-        let atGenesis = slotId tipHeader == SlotId 0
+        let atGenesis = slotId tipHeader == minBound
         if intersected || bufferFull || atGenesis
             then pure (ubs', ac')
             else fetchBackwards ubs' ac' (len + 1) (prevBlockHash tipHeader)

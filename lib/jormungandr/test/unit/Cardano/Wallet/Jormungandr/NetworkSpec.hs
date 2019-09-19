@@ -218,7 +218,7 @@ chainTip = initMay >=> lastMay
 
 -- | Slot index of the tip of a chain.
 chainEnd :: [BlockHeader] -> SlotId
-chainEnd = maybe (SlotId 0) slotId . chainTip
+chainEnd = maybe minBound slotId . chainTip
 
 -- | Limit the sequence to a certain size by removing items from the beginning.
 limitChain :: Quantity "block" Natural -> [BlockHeader] -> [BlockHeader]
@@ -285,7 +285,7 @@ intersectionPoint localChain nodeChain = res >>= checkAfter
 spliceChains :: [BlockHeader] -> [BlockHeader] -> [BlockHeader]
 spliceChains localChain nodeChain = takeToSlot start chaff ++ localChain
   where
-    start = fromMaybe (SlotId 0) $ firstSlot localChain
+    start = fromMaybe minBound $ firstSlot localChain
     -- chaff is the same shape as the node chain, but with different hashes
     chaff = [bh { prevBlockHash = Hash "x" } | bh <- nodeChain]
 
@@ -348,7 +348,7 @@ genChain (Quantity k) prefix = do
 instance Arbitrary TestCase where
     arbitrary = do
         k <- arbitrary
-        let genesis = BlockHeader (SlotId 0) (Hash "genesis")
+        let genesis = BlockHeader minBound (Hash "genesis")
         base  <- genChain k "base"
         local <- genChain k "local"
         node  <- genChain k "node"
