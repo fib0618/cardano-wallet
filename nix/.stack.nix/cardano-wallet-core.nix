@@ -64,6 +64,7 @@ in { system, compiler, flags, pkgs, hsPkgs, pkgconfPkgs, ... }:
           (hsPkgs."binary" or (buildDepError "binary"))
           (hsPkgs."bytestring" or (buildDepError "bytestring"))
           (hsPkgs."cardano-crypto" or (buildDepError "cardano-crypto"))
+          (hsPkgs."cardano-shell" or (buildDepError "cardano-shell"))
           (hsPkgs."cborg" or (buildDepError "cborg"))
           (hsPkgs."containers" or (buildDepError "containers"))
           (hsPkgs."contra-tracer" or (buildDepError "contra-tracer"))

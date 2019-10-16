@@ -7,6 +7,7 @@
         "command" = (((hackage.command)."0.1.1").revisions).default;
         "persistent-template" = (((hackage.persistent-template)."2.7.2").revisions).default;
         "persistent" = (((hackage.persistent)."2.10.1").revisions).default;
+        "canonical-json" = (((hackage.canonical-json)."0.6.0.0").revisions).default;
         "time-units" = (((hackage.time-units)."1.0.0").revisions).default;
         "libsystemd-journal" = (((hackage.libsystemd-journal)."1.4.4").revisions).default;
         bech32 = ./bech32.nix;
@@ -20,6 +21,8 @@
         cardano-wallet-jormungandr = ./cardano-wallet-jormungandr.nix;
         persistent-sqlite = ./persistent-sqlite.nix;
         cardano-crypto = ./cardano-crypto.nix;
+        cardano-shell = ./cardano-shell.nix;
+        cardano-prelude = ./cardano-prelude.nix;
         contra-tracer = ./contra-tracer.nix;
         iohk-monitoring = ./iohk-monitoring.nix;
         };

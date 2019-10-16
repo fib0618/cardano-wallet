@@ -32,6 +32,17 @@ extra-deps:
 - git: https://github.com/input-output-hk/cardano-crypto
   commit: 3c5db489c71a4d70ee43f5f9b979fcde3c797f2a
 
+# cardano-shell (for NodeIPC)
+- git: https://github.com/input-output-hk/cardano-shell
+  commit: 2bb1ed5f9ed2ce7f3c4fe1b88e070c367bc63581
+  subdirs:
+    - cardano-shell
+
+# cardano-prelude (for cardano-shell)
+- git: https://github.com/input-output-hk/cardano-prelude
+  commit: 599d27a05597f96b9bfffa7920806fa638dcea10
+- canonical-json-0.6.0.0
+
 # iohk-monitoring-framework
 - git: https://github.com/input-output-hk/iohk-monitoring-framework
   commit: bd31cd2f3922010ddb76bb869f29c4e63bb8001b
