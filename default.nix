@@ -37,7 +37,7 @@ let
     inherit cardano-http-bridge cardano-sl-node jormungandr;
     inherit (iohkLib.nix-tools) iohk-extras iohk-module;
   };
-
+  daedalus-bridge = import ./nix/daedalus-bridge.nix { inherit target pkgs haskellPackages system crossSystem jormungandr jormungandr-cli; };
 in {
   inherit pkgs iohkLib src haskellPackages;
   inherit cardano-http-bridge cardano-sl-node jormungandr jormungandr-cli;
@@ -51,7 +51,8 @@ in {
   tests = collectComponents "tests" isCardanoWallet haskellPackages;
   benchmarks = collectComponents "benchmarks" isCardanoWallet haskellPackages;
 
-  daedalus-bridge = import ./nix/daedalus-bridge.nix { inherit target pkgs haskellPackages system crossSystem jormungandr jormungandr-cli; };
+  inherit daedalus-bridge;
+  daedalus-test = import ./nix/daedalus-test.nix { inherit target pkgs haskellPackages system crossSystem jormungandr jormungandr-cli daedalus-bridge; };
 
   shell = haskellPackages.shellFor {
     name = "cardano-wallet-shell";

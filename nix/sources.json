@@ -11,6 +11,18 @@
         "url": "https://github.com/input-output-hk/cardano-shell/archive/b8b07142f713119b07e40ebcb5173fb2bd304c1e.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
+    "daedalus": {
+        "branch": "v2-integration-disasm",
+        "description": "Daedalus - cryptocurrency wallet",
+        "homepage": "https://daedaluswallet.io/",
+        "owner": "input-output-hk",
+        "repo": "daedalus",
+        "rev": "24c706b39040f769935319d668703db8fed1a704",
+        "sha256": "0rir56inxl7niwhah83xzi6r4g9w01vpwghgs7vnfr2ifsixib30",
+        "type": "tarball",
+        "url": "https://github.com/input-output-hk/daedalus/archive/24c706b39040f769935319d668703db8fed1a704.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
     "gitignore": {
         "branch": "master",
         "description": "Nix function for filtering local git sources",
