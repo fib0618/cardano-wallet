@@ -18,8 +18,6 @@ import Prelude
 
 import Cardano.BM.Trace
     ( nullTracer )
-import Cardano.Launcher
-    ( StdStream (..) )
 import Cardano.Wallet.Jormungandr.Network
     ( JormungandrConfig (..), JormungandrConnParams, withJormungandr )
 import Cardano.Wallet.Network.Ports
@@ -38,8 +36,6 @@ import System.Environment
     ( lookupEnv )
 import System.FilePath
     ( FilePath, (</>) )
-import System.IO
-    ( IOMode (..), hClose, openFile )
 import System.IO.Temp
     ( createTempDirectory, getCanonicalTemporaryDirectory )
 import Test.Hspec
@@ -60,21 +56,16 @@ setupConfig = do
     let dir = "test/data/jormungandr"
     tmp <- getCanonicalTemporaryDirectory
     configDir <- createTempDirectory tmp "cardano-wallet-jormungandr"
-    logFile <- openFile (configDir </> "jormungandr.log") WriteMode
     let cfg = JormungandrConfig
             configDir
             (Right $ dir </> "block0.bin")
             Nothing
-            (UseHandle logFile)
             ["--secret", dir </> "secret.yaml"]
     genConfigYaml cfg
     pure cfg
 
 teardownConfig :: JormungandrConfig -> IO ()
-teardownConfig (JormungandrConfig d _ _ output _) = do
-    case output of
-        UseHandle h -> hClose h
-        _ -> pure ()
+teardownConfig (JormungandrConfig d _ _ _) = do
     override <- maybe False (not . null) <$> lookupEnv "NO_CLEANUP"
     exists <- doesDirectoryExist d
     case (override, exists) of
@@ -108,7 +99,7 @@ spec = describe "genConfigFile integration tests helper" $ do
         }|]
 
 genConfigYaml :: JormungandrConfig -> IO ()
-genConfigYaml (JormungandrConfig stateDir _ _ _ _) = do
+genConfigYaml (JormungandrConfig stateDir _ _ _) = do
     p2pPort <- getRandomPort
     genConfigFile stateDir p2pPort
         & Yaml.encodeFile nodeConfigFile

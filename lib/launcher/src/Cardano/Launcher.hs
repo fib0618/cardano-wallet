@@ -12,7 +12,6 @@
 
 module Cardano.Launcher
     ( Command (..)
-    , StdStream(..)
     , ProcessHasExited(..)
     , launch
     , withBackendProcess
@@ -37,7 +36,7 @@ import Cardano.BM.Trace
 import Control.Concurrent
     ( threadDelay )
 import Control.Concurrent.Async
-    ( async, race, waitAnyCancel )
+    ( async, concurrently_, race, waitAnyCancel, withAsync )
 import Control.Exception
     ( Exception, IOException, tryJust )
 import Control.Monad
@@ -68,7 +67,14 @@ import GHC.Generics
 import System.Exit
     ( ExitCode (..) )
 import System.IO
-    ( hSetEncoding, mkTextEncoding, stderr, stdin, stdout )
+    ( BufferMode (..)
+    , hSetBuffering
+    , hSetEncoding
+    , mkTextEncoding
+    , stderr
+    , stdin
+    , stdout
+    )
 import System.IO.CodePage
     ( withCP65001 )
 import System.Process
@@ -88,6 +94,7 @@ import Cardano.Launcher.POSIX
     ( installSignalHandlers )
 #endif
 
+import qualified Data.ByteString.Char8 as B8
 import qualified Data.Text as T
 
 -- | Represent a command to execute. Args are provided as a list where options
@@ -106,8 +113,6 @@ data Command = Command
     , cmdArgs :: [String]
     , cmdSetup :: IO ()
         -- ^ An extra action to run _before_ the command
-    , cmdOutput :: StdStream
-        -- ^ What to do with stdout & stderr
     } deriving (Generic)
 
 -- Format a command nicely with one argument / option per line.
@@ -119,7 +124,7 @@ data Command = Command
 --     --port 8080
 --     --network mainnet
 instance Buildable Command where
-    build (Command name args _ _) = build name
+    build (Command name args _) = build name
         <> "\n"
         <> indentF 4
             (blockListF' "" build $ snd $ foldl buildOptions ("", []) args)
@@ -167,17 +172,20 @@ withBackendProcess
     -> IO a
     -- ^ Action to execute while process is running.
     -> IO (Either ProcessHasExited a)
-withBackendProcess tr cmd@(Command name args before output) action = do
+withBackendProcess tr cmd@(Command name args before) action = do
     before
     launcherLog tr $ MsgLauncherStart cmd
-    let process = (proc name args) { std_out = output, std_err = output }
+    let process = (proc name args) { std_out = CreatePipe, std_err = CreatePipe }
     res <- fmap join $ tryJust spawnPredicate $
-        withCreateProcess process $ \_ _ _ h -> do
+        withCreateProcess process $ \_ (Just out) (Just err) h -> do
             pid <- maybe "-" (T.pack . show) <$> getPid h
             let tr' = appendName (T.pack name <> "." <> pid) tr
             launcherLog tr' $ MsgLauncherStarted name pid
-            race (ProcessHasExited name <$> waitForProcess h)
-                (action <* launcherLog tr' MsgLauncherCleanup)
+            let proxyOutputs =
+                    concurrently_ (proxy out stdout) (proxy err stderr)
+            let backendProcess = withAsync proxyOutputs $ \_ ->
+                    ProcessHasExited name <$> waitForProcess h
+            race backendProcess (action <* launcherLog tr' MsgLauncherCleanup)
     either (launcherLog tr . MsgLauncherFinish) (const $ pure ()) res
     pure res
   where
@@ -189,6 +197,11 @@ withBackendProcess tr cmd@(Command name args before output) action = do
     spawnPredicate e
         | name `isPrefixOf` show e = Just (ProcessDidNotStart name e)
         | otherwise = Nothing
+
+    -- copy one line at a time from one handle to another
+    proxy src dst = do
+              hSetBuffering src LineBuffering
+              forever (B8.hGetLine src >>= B8.hPutStrLn dst)
 
 {-------------------------------------------------------------------------------
                                     Logging
@@ -202,7 +215,7 @@ data LauncherLog
     deriving (Generic, ToJSON)
 
 instance ToJSON Command where
-    toJSON (Command name args _ _) = toJSON (name:args)
+    toJSON (Command name args _) = toJSON (name:args)
 
 instance ToJSON ProcessHasExited where
     toJSON (ProcessDidNotStart name e) =

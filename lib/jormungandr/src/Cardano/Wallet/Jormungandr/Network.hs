@@ -61,7 +61,6 @@ import Cardano.CLI
 import Cardano.Launcher
     ( Command (..)
     , ProcessHasExited
-    , StdStream (..)
     , transformLauncherTrace
     , withBackendProcess
     )
@@ -174,7 +173,6 @@ data JormungandrConfig = JormungandrConfig
     { _stateDir :: FilePath
     , _genesisBlock :: Either (Hash "Genesis") FilePath
     , _restApiPort :: Maybe PortNumber
-    , _outputStream :: StdStream
     , _extraArgs :: [String]
     } deriving (Show, Eq)
 
@@ -485,7 +483,7 @@ withJormungandr
     -> (JormungandrConnParams -> IO a)
     -- ^ Action to run while node is running.
     -> IO (Either ErrStartup a)
-withJormungandr tr (JormungandrConfig stateDir block0 mPort output extraArgs) cb = do
+withJormungandr tr (JormungandrConfig stateDir block0 mPort extraArgs) cb = do
     apiPort <- maybe getRandomPort pure mPort
     let baseUrl = localhostBaseUrl $ fromIntegral apiPort
     getGenesisBlockArg block0 >>= \case
@@ -494,7 +492,7 @@ withJormungandr tr (JormungandrConfig stateDir block0 mPort output extraArgs) cb
                     [ "--rest-listen", "127.0.0.1:" <> show apiPort
                     , "--storage", stateDir </> "chain"
                     ] ++ extraArgs
-            let cmd = Command "jormungandr" args (return ()) output
+            let cmd = Command "jormungandr" args (return ())
             let tr' = transformLauncherTrace tr
             res <- withBackendProcess tr' cmd $ do
                 waitForPort defaultRetryPolicy apiPort >>= \case

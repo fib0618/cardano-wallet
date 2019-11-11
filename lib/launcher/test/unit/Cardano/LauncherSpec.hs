@@ -9,7 +9,7 @@ import Prelude
 import Cardano.BM.Trace
     ( nullTracer )
 import Cardano.Launcher
-    ( Command (..), ProcessHasExited (..), StdStream (..), launch )
+    ( Command (..), ProcessHasExited (..), launch )
 import Control.Concurrent.MVar
     ( newEmptyMVar, putMVar, tryReadMVar )
 import Data.Text
@@ -32,7 +32,6 @@ spec = do
                 , "--port", "8080"
                 , "--template", "mainnet"
                 ] (pure ())
-                Inherit
 
         pretty @_ @Text command `shouldBe`
             "server\n\
@@ -88,7 +87,7 @@ spec = do
 
     it "Handles command not found" $ do
         let commands =
-                [ Command "foobar" [] (pure ()) Inherit
+                [ Command "foobar" [] (pure ())
                 ]
         ProcessDidNotStart name _exc <- launch nullTracer commands
         name `shouldBe` "foobar"
@@ -100,18 +99,18 @@ spec = do
 mockCommand :: Bool -> IO () -> Command
 mockCommand success before
     | isWindows && success =
-        Command "TIMEOUT" ["1"] before Inherit
+        Command "TIMEOUT" ["1"] before
     | isWindows && not success =
-        Command "CHOICE" ["/T", "1", "/C", "wat", "/D", "t"] before Inherit
+        Command "CHOICE" ["/T", "1", "/C", "wat", "/D", "t"] before
     | otherwise =
-        Command "sh" ["-c", "sleep 1; exit " ++ show exitStatus] before Inherit
+        Command "sh" ["-c", "sleep 1; exit " ++ show exitStatus] before
         where exitStatus = if success then 0 else 3 :: Int
 
 -- | A command that will run for longer than the other commands.
 foreverCommand :: Command
 foreverCommand
-    | isWindows = Command "TIMEOUT" ["30"] (pure ()) Inherit
-    | otherwise = Command "sleep" ["30"] (pure ()) Inherit
+    | isWindows = Command "TIMEOUT" ["30"] (pure ())
+    | otherwise = Command "sleep" ["30"] (pure ())
 
 isWindows :: Bool
 isWindows = os == "mingw32"

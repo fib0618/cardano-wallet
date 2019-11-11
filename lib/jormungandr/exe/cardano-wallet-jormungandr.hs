@@ -56,7 +56,7 @@ import Cardano.CLI
     , withLogging
     )
 import Cardano.Launcher
-    ( StdStream (..), withUtf8Encoding )
+    ( withUtf8Encoding )
 import Cardano.Wallet.Api.Server
     ( HostPreference, Listen (..) )
 import Cardano.Wallet.Jormungandr
@@ -222,7 +222,6 @@ cmdLaunch dataDir = command "launch" $ info (helper <*> cmd) $ mempty
                     { _stateDir = stateDir
                     , _genesisBlock = genesisBlock jArgs
                     , _restApiPort = fromIntegral . getPort <$> nodePort
-                    , _outputStream = Inherit
                     , _extraArgs = extraJormungandrArgs jArgs
                     }
             setupDirectory (logInfo tr) stateDir
