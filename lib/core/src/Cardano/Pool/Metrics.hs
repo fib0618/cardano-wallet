@@ -294,6 +294,7 @@ newStakePoolLayer tr db@DBLayer{..} nl metadataDir = StakePoolLayer
             <*> readPoolProduction nodeEpoch
             <*> readPoolProductionTip
 
+
         when (Map.null distr || Map.null prod) $ do
             liftIO $ logTrace tr $ MsgComputedProgress prodTip nodeTip
             throwE $ ErrMetricsIsUnsynced $ computeProgress prodTip nodeTip
