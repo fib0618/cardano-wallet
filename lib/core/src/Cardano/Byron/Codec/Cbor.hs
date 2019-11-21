@@ -308,6 +308,8 @@ decodeGenesisBlockHeader = do
     -- extra complexity at the type-level. That's a bit dodgy though.
     return $ BlockHeader
         { slotId = SlotId (EpochNo $ fromIntegral epoch) 0
+          -- TODO: We might want to blow up here, instead of silently
+          -- truncating.
         , blockHeight = Quantity $ fromIntegral difficulty
         , headerHash = Hash "http-bridge"
         , parentHeaderHash = previous

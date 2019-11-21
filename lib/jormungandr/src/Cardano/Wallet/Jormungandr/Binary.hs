@@ -194,6 +194,8 @@ getBlockHeader = label "getBlockHeader" $ do
         -- Common structure.
         version <- getWord16be
         contentSize <- getWord32be
+          -- TODO: We might want to blow up here, instead of silently
+          -- truncating.
         slotEpoch <- fromIntegral <$> getWord32be
         slotNo <- SlotNo <$> getWord32be
         chainLength <- getWord32be
