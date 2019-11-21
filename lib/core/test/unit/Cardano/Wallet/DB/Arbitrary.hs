@@ -121,6 +121,8 @@ import Data.Typeable
     ( Typeable )
 import Data.Word
     ( Word32 )
+import Data.Word.Odd
+    ( Word31 )
 import Fmt
     ( Buildable (..), Builder, blockListF', prefixF, suffixF, tupleF )
 import GHC.Generics
@@ -308,8 +310,12 @@ instance Arbitrary SlotNo where
     arbitrary = SlotNo <$> choose (0, fromIntegral arbitraryChainLength)
 
 instance Arbitrary EpochNo where
-    shrink (EpochNo x) = EpochNo <$> shrink x
-    arbitrary = EpochNo <$> choose (0, fromIntegral arbitraryEpochLength)
+    shrink (EpochNo x) =
+        EpochNo . fromIntegral @Word32 <$>
+            shrink (fromIntegral @Word31 x)
+    arbitrary =
+        EpochNo . fromIntegral @Word32 <$>
+            choose (0, fromIntegral arbitraryEpochLength)
 
 arbitraryEpochLength :: Word32
 arbitraryEpochLength = 100

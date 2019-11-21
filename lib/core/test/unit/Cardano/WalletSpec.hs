@@ -122,6 +122,8 @@ import Data.Time.Clock.POSIX
     ( posixSecondsToUTCTime )
 import Data.Word
     ( Word32 )
+import Data.Word.Odd
+    ( Word31 )
 import GHC.Generics
     ( Generic )
 import Test.Hspec
@@ -132,6 +134,7 @@ import Test.QuickCheck
     , Positive (..)
     , Property
     , arbitraryBoundedEnum
+    , arbitrarySizedBoundedIntegral
     , choose
     , elements
     , property
@@ -515,8 +518,10 @@ instance Arbitrary SlotNo where
     arbitrary = SlotNo <$> arbitrary
 
 instance Arbitrary EpochNo where
-    shrink (EpochNo x) = EpochNo <$> shrink x
-    arbitrary = EpochNo <$> arbitrary
+    shrink (EpochNo x) =
+        EpochNo . fromIntegral @Word32 <$> shrink (fromIntegral @Word31 x)
+    arbitrary =
+        EpochNo <$> arbitrarySizedBoundedIntegral
 
 instance Arbitrary SortOrder where
     shrink _ = []
@@ -562,7 +567,7 @@ instance Arbitrary TxMeta where
         <$> elements [Pending, InLedger]
         <*> elements [Incoming, Outgoing]
         <*> (SlotId
-            <$> (EpochNo <$> choose (0, 1000))
+            <$> (EpochNo . fromIntegral @Word32 @Word31 <$> choose (0, 1000))
             <*> (SlotNo <$> choose (0, 21599)))
         <*> fmap Quantity arbitrary
         <*> fmap (Quantity . fromIntegral) (arbitrary @Word32)

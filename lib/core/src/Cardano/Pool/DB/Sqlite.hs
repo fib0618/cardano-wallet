@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -55,7 +56,9 @@ import Data.Quantity
 import Data.Text
     ( Text )
 import Data.Word
-    ( Word64 )
+    ( Word32, Word64 )
+import Data.Word.Odd
+    ( Word31 )
 import Database.Persist.Sql
     ( Entity (..)
     , Filter
@@ -149,18 +152,18 @@ newDBLayer logConfig trace fp = do
             pure (foldl' toMap Map.empty production)
 
         , putStakeDistribution = \epoch@(EpochNo ep) distribution -> do
-            deleteWhere [StakeDistributionEpoch ==. ep]
+            deleteWhere [StakeDistributionEpoch ==. fromIntegral ep]
             insertMany_ (mkStakeDistribution epoch distribution)
 
         , readStakeDistribution = \(EpochNo epoch) -> do
             fmap (fromStakeDistribution . entityVal) <$> selectList
-                [ StakeDistributionEpoch ==. epoch ]
+                [ StakeDistributionEpoch ==. fromIntegral epoch ]
                 []
 
         , rollbackTo = \point -> do
             let (EpochNo epoch) = epochNumber point
             deleteWhere [ PoolProductionSlot >. point ]
-            deleteWhere [ StakeDistributionEpoch >. epoch ]
+            deleteWhere [ StakeDistributionEpoch >. fromIntegral epoch ]
 
         , readPoolProductionCursor = \k -> do
             reverse . map (snd . fromPoolProduction . entityVal) <$> selectList
@@ -221,7 +224,7 @@ mkStakeDistribution
 mkStakeDistribution (EpochNo epoch) = map $ \(pool, (Quantity stake)) ->
     StakeDistribution
         { stakeDistributionPoolId = pool
-        , stakeDistributionEpoch = epoch
+        , stakeDistributionEpoch = fromIntegral @Word31 @Word32 epoch
         , stakeDistributionStake = stake
         }
 

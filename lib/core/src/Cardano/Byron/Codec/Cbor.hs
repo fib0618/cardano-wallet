@@ -307,7 +307,7 @@ decodeGenesisBlockHeader = do
     -- the genesis block entirely and we won't bother about modelling this
     -- extra complexity at the type-level. That's a bit dodgy though.
     return $ BlockHeader
-        { slotId = SlotId (EpochNo epoch) 0
+        { slotId = SlotId (EpochNo $ fromIntegral epoch) 0
         , blockHeight = Quantity $ fromIntegral difficulty
         , headerHash = Hash "http-bridge"
         , parentHeaderHash = previous
@@ -358,7 +358,7 @@ decodeMainBlockHeader = do
     _ <- decodeMainExtraData
     let bh = Quantity $ fromIntegral difficulty
     return $ BlockHeader
-        { slotId = SlotId (EpochNo epoch) (SlotNo slot)
+        { slotId = SlotId (EpochNo $ fromIntegral epoch) (SlotNo slot)
         , blockHeight = bh
         , headerHash = Hash "http-bridge"
         , parentHeaderHash = previous

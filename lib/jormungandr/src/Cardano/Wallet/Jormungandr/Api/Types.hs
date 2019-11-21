@@ -67,7 +67,7 @@ import Data.Quantity
 import Data.Text.Class
     ( FromText (..), ToText (..) )
 import Data.Word
-    ( Word64 )
+    ( Word32, Word64 )
 import GHC.Generics
     ( Generic )
 import Servant.API
@@ -222,7 +222,7 @@ instance ToJSON (ApiT (Quantity "transaction-count" Word64)) where
     toJSON (ApiT (Quantity q)) = toJSON q
 
 instance FromJSON (ApiT EpochNo) where
-    parseJSON = fmap (ApiT . EpochNo) . parseJSON
+    parseJSON = fmap (ApiT . EpochNo . fromIntegral @Word32) . parseJSON
 
 instance FromJSON (ApiT PoolId) where
     parseJSON = parseJSON >=> eitherToParser . bimap ShowFmt ApiT . fromText

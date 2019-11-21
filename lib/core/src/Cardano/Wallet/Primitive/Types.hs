@@ -197,6 +197,8 @@ import Data.Time.Clock
     ( NominalDiffTime, UTCTime, addUTCTime, diffUTCTime )
 import Data.Word
     ( Word32, Word64 )
+import Data.Word.Odd
+    ( Word31 )
 import Fmt
     ( Buildable (..)
     , blockListF
@@ -990,9 +992,15 @@ newtype SlotNo = SlotNo { unSlotNo :: Word32 }
     deriving stock (Show, Read, Eq, Ord, Generic)
     deriving newtype (Num, Buildable, NFData, Enum)
 
-newtype EpochNo = EpochNo { unEpochNo :: Word64 }
+newtype EpochNo = EpochNo { unEpochNo :: Word31 }
     deriving stock (Show, Read, Eq, Ord, Generic)
-    deriving newtype (Num, Buildable, NFData, Enum)
+    deriving newtype (Num, Enum)
+
+instance Buildable EpochNo where
+    build (EpochNo e) = build $ fromIntegral @Word31 @Word32 e
+
+instance NFData EpochNo where
+    rnf (EpochNo w) = rnf (fromIntegral w :: Word32)
 
 instance NFData SlotId
 
@@ -1129,12 +1137,12 @@ syncProgressRelativeToTime tolerance sp tip time =
 -- | Convert a 'SlotId' to the number of slots since genesis.
 flatSlot :: EpochLength -> SlotId -> Word64
 flatSlot (EpochLength epochLength) (SlotId (EpochNo e) (SlotNo s)) =
-    fromIntegral epochLength * e + fromIntegral s
+    fromIntegral epochLength * fromIntegral e + fromIntegral s
 
 -- | Convert a 'flatSlot' index to 'SlotId'.
 fromFlatSlot :: EpochLength -> Word64 -> SlotId
 fromFlatSlot (EpochLength epochLength) n =
-    SlotId (EpochNo e) (fromIntegral s)
+    SlotId (EpochNo $ fromIntegral e) (fromIntegral s)
   where
     e = n `div` fromIntegral epochLength
     s = n `mod` fromIntegral epochLength

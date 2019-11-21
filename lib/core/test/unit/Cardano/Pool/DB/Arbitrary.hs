@@ -2,6 +2,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE OverloadedLabels #-}
+{-# LANGUAGE TypeApplications #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -36,6 +37,8 @@ import Data.Quantity
     ( Quantity (..) )
 import Data.Word
     ( Word32, Word64 )
+import Data.Word.Odd
+    ( Word31 )
 import Test.QuickCheck
     ( Arbitrary (..), Gen, choose, elements, shuffle, vectorOf )
 
@@ -65,8 +68,12 @@ instance Arbitrary SlotNo where
     arbitrary = SlotNo <$> choose (0, fromIntegral arbitraryChainLength)
 
 instance Arbitrary EpochNo where
-    shrink (EpochNo x) = EpochNo <$> shrink x
-    arbitrary = EpochNo <$> choose (0, fromIntegral arbitraryEpochLength)
+    shrink (EpochNo x) =
+        EpochNo . fromIntegral @Word32 <$>
+            shrink (fromIntegral @Word31 x)
+    arbitrary =
+        EpochNo . fromIntegral @Word32 <$>
+            choose (0, fromIntegral arbitraryEpochLength)
 
 instance Arbitrary (Quantity "lovelace" Word64) where
     shrink (Quantity q) = [ Quantity q' | q' <- shrink q ]

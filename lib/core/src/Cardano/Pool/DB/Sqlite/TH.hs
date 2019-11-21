@@ -55,7 +55,7 @@ PoolProduction sql=pool_production
 -- Stake distribution for each stake pool
 StakeDistribution sql=stake_distribution
     stakeDistributionPoolId     W.PoolId     sql=pool_id
-    stakeDistributionEpoch      Word64       sql=epoch
+    stakeDistributionEpoch      Word32       sql=epoch
     stakeDistributionStake      Word64       sql=stake
 
     Primary stakeDistributionPoolId stakeDistributionEpoch

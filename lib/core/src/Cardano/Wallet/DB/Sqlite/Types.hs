@@ -77,7 +77,9 @@ import Data.Text.Class
     , getTextDecodingError
     )
 import Data.Word
-    ( Word64, Word8 )
+    ( Word32, Word64, Word8 )
+import Data.Word.Odd
+    ( Word31 )
 import Database.Persist.Sqlite
     ( PersistField (..), PersistFieldSql (..), PersistValue )
 import Database.Persist.TH
@@ -285,10 +287,10 @@ instance FromJSON SlotNo where
     parseJSON = fmap SlotNo . parseJSON
 
 instance ToJSON EpochNo where
-    toJSON (EpochNo n) = toJSON n
+    toJSON (EpochNo n) = toJSON (fromIntegral @Word31 @Word32 n)
 
 instance FromJSON EpochNo where
-    parseJSON = fmap EpochNo . parseJSON
+    parseJSON = fmap (EpochNo . fromIntegral @Word32 @Word31) . parseJSON
 
 instance ToHttpApiData SlotId where
     toUrlPiece = error "toUrlPiece stub needed for persistent"
