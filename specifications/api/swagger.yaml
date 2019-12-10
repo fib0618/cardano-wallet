@@ -329,6 +329,12 @@ x-transactionOutputs: &transactionOutputs
       address: *addressId
       amount: *transactionAmount
 
+x-transactionResolvedInputs: &transactionResolvedInputs
+  description: A list of transaction inputs
+  type: array
+  minItems: 0
+  items: *ApiCoinSelectionInput
+
 x-signedTransactionBlob: &signedTransactionBlob
   description: Signed transaction message binary blob.
   type: string
@@ -533,6 +539,15 @@ definitions:
       - payments
     properties:
       payments: *transactionOutputs
+
+  ApiCoinSelection: &ApiCoinSelection
+    type: object
+    required:
+      - inputs
+      - outputs
+    properties:
+      inputs: *transactionResolvedInputs
+      outputs: *transactionOutputs
 
   ApiCoinSelectionInput: &ApiCoinSelectionInput
     type: object
