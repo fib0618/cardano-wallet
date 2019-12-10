@@ -534,6 +534,21 @@ definitions:
     properties:
       payments: *transactionOutputs
 
+  ApiCoinSelectionInput: &ApiCoinSelectionInput
+    type: object
+    required:
+      - id
+      - index
+      - address
+      - amount
+    properties:
+      address: *addressId
+      amount: *transactionAmount
+      id: *transactionId
+      index:
+        type: integer
+        minimum: 0
+
   ApiStakePool: &ApiStakePool
     type: object
     required:

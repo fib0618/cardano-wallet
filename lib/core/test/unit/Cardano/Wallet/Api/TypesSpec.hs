@@ -33,6 +33,7 @@ import Cardano.Wallet.Api.Types
     , ApiByronWallet (..)
     , ApiByronWalletBalance (..)
     , ApiByronWalletMigrationInfo (..)
+    , ApiCoinSelectionInput (..)
     , ApiEpochInfo (..)
     , ApiSelectCoinsData (..)
     , ApiFee (..)
@@ -265,6 +266,7 @@ spec = do
             jsonRoundtripAndGolden $ Proxy @(ApiAddress 'Testnet)
             jsonRoundtripAndGolden $ Proxy @ApiEpochInfo
             jsonRoundtripAndGolden $ Proxy @(ApiSelectCoinsData 'Testnet)
+            jsonRoundtripAndGolden $ Proxy @(ApiCoinSelectionInput 'Testnet)
             jsonRoundtripAndGolden $ Proxy @ApiTimeReference
             jsonRoundtripAndGolden $ Proxy @ApiNetworkTip
             jsonRoundtripAndGolden $ Proxy @ApiBlockReference
@@ -603,6 +605,16 @@ spec = do
                     }
             in
                 x' === x .&&. show x' === show x
+        it "ApiCoinSelectionInput" $ property $ \x ->
+            let
+                x' = ApiCoinSelectionInput
+                    { id = id (x :: ApiCoinSelectionInput 'Testnet)
+                    , index = index (x :: ApiCoinSelectionInput 'Testnet)
+                    , address = address (x :: ApiCoinSelectionInput 'Testnet)
+                    , amount = amount (x :: ApiCoinSelectionInput 'Testnet)
+                    }
+            in
+                x' === x .&&. show x' === show x
         it "ApiWallet" $ property $ \x ->
             let
                 x' = ApiWallet
@@ -894,6 +906,14 @@ instance Arbitrary ApiEpochInfo where
 instance Arbitrary (ApiSelectCoinsData n) where
     arbitrary = genericArbitrary
     shrink = genericShrink
+
+instance Arbitrary (ApiCoinSelectionInput n) where
+    arbitrary = ApiCoinSelectionInput
+        <$> arbitrary
+        <*> arbitrary
+        <*> fmap (, Proxy @n) arbitrary
+        <*> arbitrary
+    shrink _ = []
 
 instance Arbitrary AddressState where
     arbitrary = genericArbitrary
@@ -1340,6 +1360,9 @@ instance ToSchema (ApiAddress t) where
 
 instance ToSchema (ApiSelectCoinsData n) where
     declareNamedSchema _ = declareSchemaForDefinition "ApiSelectCoinsData"
+
+instance ToSchema (ApiCoinSelectionInput n) where
+    declareNamedSchema _ = declareSchemaForDefinition "ApiCoinSelectionInput"
 
 instance ToSchema ApiWallet where
     declareNamedSchema _ = declareSchemaForDefinition "ApiWallet"
