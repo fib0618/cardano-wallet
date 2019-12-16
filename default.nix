@@ -38,6 +38,7 @@ let
 
     tests = collectComponents "tests" isCardanoWallet haskellPackages;
     benchmarks = collectComponents "benchmarks" isCardanoWallet haskellPackages;
+    migration-tests = import ./nix/migration-tests.nix { inherit system crossSystem config pkgs; };
 
     dockerImage = pkgs.callPackage ./nix/docker.nix {
       inherit (self) cardano-wallet-jormungandr;
