@@ -118,8 +118,6 @@ import Network.Wai.Middleware.Logging
     ( ApiLog )
 import System.Exit
     ( ExitCode (..) )
-import System.IO.Temp
-    ( withSystemTempDirectory )
 
 import qualified Cardano.BM.Configuration.Model as CM
 import qualified Cardano.Pool.DB as Pool
@@ -127,17 +125,17 @@ import qualified Cardano.Pool.DB.Sqlite as Pool
 import qualified Cardano.Pool.Metrics as Pool
 import qualified Cardano.Wallet.Api.Server as Server
 import qualified Cardano.Wallet.DB.Sqlite as Sqlite
-import qualified Cardano.Wallet.Jormungandr.Binary as J
 import qualified Data.Text as T
 import qualified Network.Wai.Handler.Warp as Warp
+
+data ShelleyBackend
 
 -- | The @cardano-wallet-jormungandr@ main function. It takes the configuration
 -- which was passed from the CLI and environment and starts all components of
 -- the wallet.
 serveWallet
     :: forall (n :: NetworkDiscriminant) t.
-        ( t ~ Jormungandr
-        , NetworkDiscriminantVal n
+        ( NetworkDiscriminantVal n
         , DecodeAddress n
         , EncodeAddress n
         , DelegationAddress n ShelleyKey
@@ -153,7 +151,7 @@ serveWallet
     -- ^ Which host to bind.
     -> Listen
     -- ^ HTTP API Server port.
-    -> JormungandrBackend
+    -> ShelleyBackend
     -- ^ Whether and how to launch or use the node backend.
     -> (SockAddr -> Port "node" -> BlockchainParameters -> IO ())
     -- ^ Callback to run before the main loop
@@ -164,7 +162,7 @@ serveWallet
     logInfo trText "Wallet backend server starting..."
     logInfo trText $ "Node is Jörmungandr on " <> toText (networkDiscriminantVal @n)
     Server.withListeningSocket hostPref listen $ \case
-        Left e -> handleApiServerStartupError e
+        Left e -> error "todo"
         Right (wPort, socket) -> do
             let tracerIPC = appendName "daedalus-ipc" trText
             either id id <$> race
@@ -219,7 +217,7 @@ serveWallet
             )
         => Trace IO Text
         -> TransactionLayer t k
-        -> NetworkLayer IO t J.Block
+        -> NetworkLayer IO t Block
         -> IO (ApiLayer s t k)
     apiLayer tracer tl nl = do
         let (block0, bp) = staticBlockchainParameters nl
@@ -232,7 +230,7 @@ serveWallet
 
     stakePoolLayer
         :: Trace IO ServerLog
-        -> NetworkLayer IO t J.Block
+        -> NetworkLayer IO t Block
         -> Pool.DBLayer IO
         -> FilePath
         -> IO (StakePoolLayer IO)
@@ -244,102 +242,6 @@ serveWallet
         nl' = toSPBlock <$> nl
         onExit = defaultWorkerAfter tr'
         trStakePool = contramap (fmap LogStakePoolLayerMsg) trRoot
-
-    handleNetworkStartupError :: ErrStartup -> IO ExitCode
-    handleNetworkStartupError = \case
-        ErrStartupGetBlockchainParameters e -> case e of
-            ErrGetBlockchainParamsNetworkUnreachable _ ->
-                handleNetworkUnreachable
-            ErrGetBlockchainParamsGenesisNotFound h ->
-                handleGenesisNotFound h
-            ErrGetBlockchainParamsIncompleteParams _ ->
-                handleNoInitialPolicy
-        ErrStartupInvalidGenesisBlock file ->
-            failWith trText $ mempty
-                <> "As far as I can tell, this isn't a valid block file: "
-                <> T.pack file
-        ErrStartupInvalidGenesisHash h ->
-            failWith trText $ mempty
-                <> "As far as I can tell, this isn't a valid block hash: "
-                <> T.pack h
-        ErrStartupCommandExited pe -> case pe of
-            ProcessDidNotStart _cmd exc ->
-                failWith trText $
-                    "Could not start the node backend. " <> T.pack (show exc)
-            ProcessHasExited _cmd st ->
-                failWith trText $
-                    "The node exited with status " <> T.pack (show st)
-        ErrStartupNodeNotListening -> do
-            failWith trText $ mempty
-                <> "Waited too long for Jörmungandr to become available. "
-                <> "Giving up!"
-
-    handleGenesisNotFound :: Hash "Genesis" -> IO ExitCode
-    handleGenesisNotFound block0H = do
-        failWith trText $ T.pack $ mconcat
-            [ "Failed to retrieve the genesis block. The block doesn't exist! "
-            , "Hint: double-check the genesis hash you've just gave "
-            , "me via '--genesis-block-hash' (i.e. " <> showT block0H <> ")."
-            ]
-
-    handleNetworkUnreachable :: IO ExitCode
-    handleNetworkUnreachable = do
-        failWith trText
-            "It looks like Jörmungandr is down? Hint: double-check Jörmungandr\
-            \ server's port."
-
-    handleNoInitialPolicy :: IO ExitCode
-    handleNoInitialPolicy = do
-        failWith trText $ mempty
-            <> "I successfully retrieved the genesis block from Jörmungandr, "
-            <> "but there's no initial fee policy defined?"
-
-    handleApiServerStartupError :: ListenError -> IO ExitCode
-    handleApiServerStartupError = \case
-        ListenErrorHostDoesNotExist host ->
-            failWith trText $ mempty
-                <> "Can't listen on "
-                <> T.pack (show host)
-                <> ". It does not exist."
-        ListenErrorInvalidAddress host ->
-            failWith trText $ mempty
-                <> "Can't listen on "
-                <> T.pack (show host)
-                <> ". Invalid address."
-        ListenErrorAddressAlreadyInUse mPort ->
-            failWith trText $ mempty
-                <> "The API server listen port "
-                <> maybe "(unknown)" (T.pack . show) mPort
-                <> " is already in use."
-        ListenErrorOperationNotPermitted ->
-            failWith trText $ mempty
-                <> "Cannot listen on the given port. "
-                <> "The operation is not permitted."
-
---------------------------------------------------------------------------------
--- Exported Utilities
---------------------------------------------------------------------------------
-
--- | Covert a raw block to one that the "Cardano.Pool.Metrics" module accepts.
-toSPBlock :: J.Block -> Pool.Block
-toSPBlock b = Pool.Block
-     (convertHeader header)
-     -- FIXME
-     -- Allow defining different types for block vs genesis block in the network
-     -- layer so that staticBlockchainParameter isn't partial.
-     (fromMaybe (error "block has no producer") $ J.producedBy header)
-     (J.poolRegistrationsFromBlock b)
-   where
-     header = J.header b
-     convertHeader :: J.BlockHeader -> BlockHeader
-     convertHeader h = BlockHeader
-         (J.slot h)
-         (Quantity $ fromIntegral $ J.chainLength h)
-         (J.headerHash h)
-         (J.parentHeaderHash h)
-
-toWLBlock :: J.Block -> Block
-toWLBlock = J.convertBlock
 
 {-------------------------------------------------------------------------------
                                     Logging

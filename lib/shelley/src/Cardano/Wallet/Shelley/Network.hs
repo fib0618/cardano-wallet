@@ -41,6 +41,7 @@ import Cardano.Chain.Slotting
     ( EpochSlots (..) )
 import Cardano.Crypto
     ( ProtocolMagicId (..) )
+import Cardano.Wallet.Network
 import Codec.SerialiseTerm
     ( CodecCBORTerm )
 import Network.Mux.Interface
@@ -187,7 +188,7 @@ runExperiment start n rollForward rollBackward = do
                     n
 
             LocalTxSubmissionPtcl ->
-                (localTxSubmission pid t) >=> const (return ())
+                localTxSubmission pid t
     connectClient client dummyNodeToClientVersion addr
 
 --------------------------------------------------------------------------------
@@ -219,7 +220,7 @@ type NetworkClient m = OuroborosApplication
         -- ^ Underlying monad we run in
     ByteString
         -- ^ Concrete representation for bytes string
-    ()
+    Void
         -- ^ -- Return type of a network client. Void indicates that the client
         -- never exits.
     Void
@@ -291,7 +292,7 @@ chainSyncWithBlocks
         -- ^ A 'Channel' is a abstract communication instrument which
         -- transports serialized messages between peers (e.g. a unix
         -- socket).
-    -> m ()
+    -> m Void
 chainSyncWithBlocks pid t params forward backward startPoint limit channel =
     runPeer trace codec pid channel (chainSyncClientPeer client)
   where
@@ -333,38 +334,34 @@ chainSyncWithBlocks pid t params forward backward startPoint limit channel =
 
     -}
 
-    client :: ChainSyncClient ByronBlock (Tip ByronBlock) m ()
+    client :: ChainSyncClient ByronBlock (Tip ByronBlock) m Void
     client = ChainSyncClient clientStIdle
       where
 
         -- Find intersection between wallet and node chains.
-        clientStIdle :: m (ClientStIdle ByronBlock (Tip ByronBlock) m ())
+        clientStIdle :: m (ClientStIdle ByronBlock (Tip ByronBlock) m Void)
         clientStIdle = do
                 pure $ SendMsgFindIntersect [startPoint] $ ClientStIntersect
                     { recvMsgIntersectFound = \_intersection _tip ->
                         ChainSyncClient $
-                            clientStFetchingBlocks limit startPoint
+                            clientStFetchingBlocks startPoint
                     , recvMsgIntersectNotFound = \_tip ->
                         ChainSyncClient $ do
                             clientStIdle
                     }
 
         clientStFetchingBlocks
-            :: Int
-                -- ^ Number of messages to fetch
-            -> Point ByronBlock
+            :: Point ByronBlock
                 -- ^ Starting point
-            -> m (ClientStIdle ByronBlock (Tip ByronBlock) m ())
-        clientStFetchingBlocks 0 _ = do
-            pure $ SendMsgDone ()
-        clientStFetchingBlocks n start = pure $ SendMsgRequestNext
+            -> m (ClientStIdle ByronBlock (Tip ByronBlock) m Void)
+        clientStFetchingBlocks start = pure $ SendMsgRequestNext
             (ClientStNext
                 { recvMsgRollForward = \block _tip -> ChainSyncClient $ do
                     forward block
-                    clientStFetchingBlocks (n-1) start
+                    clientStFetchingBlocks start
                 , recvMsgRollBackward = \point _tip -> ChainSyncClient $ do
                     backward point
-                    clientStFetchingBlocks n start
+                    clientStFetchingBlocks start
                 }
             )
             (do

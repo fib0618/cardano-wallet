@@ -34,6 +34,9 @@ library
     , bytestring
     , either
     , fmt
+    , async
+    , warp
+    , deepseq
     , cardano-ledger
     , cardano-crypto-wrapper
     , cardano-wallet-core
