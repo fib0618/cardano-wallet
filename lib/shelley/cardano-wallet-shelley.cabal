@@ -32,9 +32,14 @@ library
   build-depends:
       base
     , bytestring
+    , either
+    , fmt
     , cardano-ledger
     , cardano-crypto-wrapper
     , cardano-wallet-core
+    , cardano-wallet-cli
+    , cardano-wallet-launcher
+    , text-class
     , contra-tracer
     , io-sim-classes
     , iohk-monitoring
@@ -56,3 +61,5 @@ library
   exposed-modules:
       Cardano.Wallet.Shelley.Network
       Cardano.Wallet.Shelley.Prototype1
+      Cardano.Wallet.Shelley.Transaction
+      Cardano.Wallet.Shelley

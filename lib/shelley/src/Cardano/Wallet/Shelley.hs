@@ -22,7 +22,7 @@
 -- Functionality specific to this backend for creating transactions is in
 -- "Cardano.Wallet.Jormungandr.Transaction".
 
-module Cardano.Wallet.Jormungandr
+module Cardano.Wallet.Shelley
     ( serveWallet
 
       -- * Utilities
@@ -53,18 +53,6 @@ import Cardano.Wallet.DaedalusIPC
     ( daedalusIPC )
 import Cardano.Wallet.DB.Sqlite
     ( PersistState )
-import Cardano.Wallet.Jormungandr.Compatibility
-    ( Jormungandr )
-import Cardano.Wallet.Jormungandr.Network
-    ( BaseUrl (..)
-    , ErrGetBlockchainParams (..)
-    , ErrStartup (..)
-    , JormungandrBackend (..)
-    , JormungandrConnParams (..)
-    , withNetworkLayer
-    )
-import Cardano.Wallet.Jormungandr.Transaction
-    ( newTransactionLayer )
 import Cardano.Wallet.Network
     ( NetworkLayer (..) )
 import Cardano.Wallet.Primitive.AddressDerivation
@@ -96,6 +84,8 @@ import Cardano.Wallet.Primitive.Types
     , Hash (..)
     , SyncTolerance
     )
+import Cardano.Wallet.Shelley.Transaction
+    ( newTransactionLayer )
 import Cardano.Wallet.Transaction
     ( TransactionLayer )
 import Control.Concurrent
