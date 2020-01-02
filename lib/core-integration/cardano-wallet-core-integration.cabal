@@ -64,6 +64,7 @@ library
       Test.Integration.Framework.Request
       Test.Integration.Framework.TestData
       Test.Integration.Scenario.API.Addresses
+      Test.Integration.Scenario.API.ByronWallets2
       Test.Integration.Scenario.API.ByronWallets
       Test.Integration.Scenario.API.ByronTransactions
       Test.Integration.Scenario.API.Network

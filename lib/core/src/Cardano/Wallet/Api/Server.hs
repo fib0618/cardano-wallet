@@ -98,7 +98,6 @@ import Cardano.Wallet.Api.Types
     , ApiAddress (..)
     , ApiBlockReference (..)
     , ApiByronWallet (..)
-    , ApiByronWalletBalance (..)
     , ApiByronWalletMigrationInfo (..)
     , ApiCoinSelection (..)
     , ApiCoinSelectionInput (..)
@@ -119,6 +118,7 @@ import Cardano.Wallet.Api.Types
     , ApiUtxoStatistics (..)
     , ApiWallet (..)
     , ApiWalletPassphrase (..)
+    , ByronWalletBalance (..)
     , ByronWalletPostData (..)
     , DecodeAddress (..)
     , EncodeAddress (..)
@@ -627,7 +627,7 @@ mkLegacyWallet
     :: MkApiWallet ctx s ApiByronWallet
 mkLegacyWallet _ctx wid cp meta pending progress =
     pure ApiByronWallet
-        { balance = ApiByronWalletBalance
+        { balance = ApiT $ ByronWalletBalance
             { available = Quantity $ availableBalance pending cp
             , total = Quantity $ totalBalance pending cp
             }

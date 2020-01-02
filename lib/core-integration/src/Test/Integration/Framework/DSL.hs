@@ -10,6 +10,8 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableSuperClasses #-}
 
 {-# OPTIONS_GHC -fno-warn-simplifiable-class-constraints #-}
 
@@ -83,8 +85,6 @@ module Test.Integration.Framework.DSL
     , emptyRandomWallet
     , emptyIcarusWallet
     , emptyByronWalletWith
-    , emptyWallet
-    , emptyWalletWith
     , getFromResponse
     , getFromResponseList
     , json
@@ -97,8 +97,6 @@ module Test.Integration.Framework.DSL
     , listAllTransactions
     , tearDown
     , fixtureRawTx
-    , fixtureRandomWallet
-    , fixtureIcarusWallet
     , fixtureWallet
     , fixtureWalletWith
     , faucetAmt
@@ -169,7 +167,6 @@ import Cardano.Wallet.Api.Types
     ( AddressAmount
     , ApiAddress
     , ApiByronWallet
-    , ApiByronWalletBalance
     , ApiCoinSelection
     , ApiCoinSelectionInput
     , ApiEpochInfo
@@ -182,6 +179,7 @@ import Cardano.Wallet.Api.Types
     , ApiTxInput (..)
     , ApiUtxoStatistics (..)
     , ApiWallet
+    , ByronWalletBalance
     , Iso8601Time (..)
     )
 import Cardano.Wallet.Primitive.AddressDerivation
@@ -267,7 +265,7 @@ import Data.Time.Text
 import Data.Word
     ( Word64 )
 import GHC.TypeLits
-    ( Symbol )
+    ( KnownSymbol, Symbol, symbolVal )
 import Language.Haskell.TH.Quote
     ( QuasiQuoter )
 import Network.HTTP.Client
@@ -298,7 +296,7 @@ import Test.Hspec
 import Test.Hspec.Expectations.Lifted
     ( shouldBe, shouldContain, shouldNotBe )
 import Test.Integration.Faucet
-    ( nextTxBuilder, nextWallet )
+    ( MnemonicSize, NextWallet, nextTxBuilder, nextWallet )
 import Test.Integration.Framework.Request
     ( Context (..)
     , Headers (..)
@@ -692,16 +690,16 @@ balanceAvailable =
             , Types.reward = Quantity v
             }
 
-byronBalanceAvailable :: HasType (ApiByronWalletBalance) s => Lens' s Natural
+byronBalanceAvailable :: HasType (ApiT ByronWalletBalance) s => Lens' s Natural
 byronBalanceAvailable =
     lens _get _set
   where
-    _get :: HasType (ApiByronWalletBalance) s => s -> Natural
+    _get :: HasType (ApiT ByronWalletBalance) s => s -> Natural
     _get = fromQuantity @"lovelace" . available' . view typed
-    _set :: HasType (ApiByronWalletBalance) s => (s, Natural) -> s
+    _set :: HasType (ApiT ByronWalletBalance) s => (s, Natural) -> s
     _set (_s, _v) = error "byronBalanceAvailable setter unimplemented"
-    available' :: ApiByronWalletBalance -> Quantity "lovelace" Natural
-    available' = getField @"available"
+    available' :: ApiT ByronWalletBalance -> Quantity "lovelace" Natural
+    available' = getField @"available" . getApiT
 
 balanceTotal :: HasType (ApiT WalletBalance) s => Lens' s Natural
 balanceTotal =
@@ -719,16 +717,16 @@ balanceTotal =
             , Types.reward = Quantity v
             }
 
-byronBalanceTotal :: HasType (ApiByronWalletBalance) s => Lens' s Natural
+byronBalanceTotal :: HasType (ApiT ByronWalletBalance) s => Lens' s Natural
 byronBalanceTotal =
     lens _get _set
   where
-    _get :: HasType (ApiByronWalletBalance) s => s -> Natural
+    _get :: HasType (ApiT ByronWalletBalance) s => s -> Natural
     _get = fromQuantity @"lovelace" . total' . view typed
-    _set :: HasType (ApiByronWalletBalance) s => (s, Natural) -> s
+    _set :: HasType (ApiT ByronWalletBalance) s => (s, Natural) -> s
     _set (_s, _v) = error "byronBalanceTotal setter unimplemented"
-    total' :: ApiByronWalletBalance -> Quantity "lovelace" Natural
-    total' = getField @"total"
+    total' :: ApiT ByronWalletBalance -> Quantity "lovelace" Natural
+    total' = getField @"total" . getApiT
 
 
 balanceReward :: HasType (ApiT WalletBalance) s => Lens' s Natural
@@ -999,42 +997,15 @@ emptyIcarusWallet ctx = do
     emptyByronWalletWith ctx "icarus" ("Icarus Wallet", mnemonic, "Secure Passphrase")
 
 emptyByronWalletWith :: Context t -> Text -> (Text, [Text], Text) -> IO ApiByronWallet
-emptyByronWalletWith ctx style (name, mnemonic, pass) = do
-    let payload = Json [aesonQQ| {
-            "name": #{name},
-            "mnemonic_sentence": #{mnemonic},
-            "passphrase": #{pass}
-        }|]
-    r <- request @ApiByronWallet ctx (postByronWalletEp style) Default payload
-    expectResponseCode @IO HTTP.status201 r
-    return (getFromResponse id r)
-
--- | Create an empty wallet
-emptyWallet :: Context t -> IO ApiWallet
-emptyWallet ctx = do
-    mnemonic <- (mnemonicToText . entropyToMnemonic) <$> genEntropy @160
-    let payload = Json [aesonQQ| {
-            "name": "Empty Wallet",
-            "mnemonic_sentence": #{mnemonic},
-            "passphrase": "Secure Passphrase"
-        }|]
-    r <- request @ApiWallet ctx postWalletEp Default payload
-    expectResponseCode @IO HTTP.status201 r
-    return (getFromResponse id r)
-
--- | Create an empty wallet
-emptyWalletWith :: Context t -> (Text, Text, Int) -> IO ApiWallet
-emptyWalletWith ctx (name, passphrase, addrPoolGap) = do
-    mnemonic <- (mnemonicToText . entropyToMnemonic) <$> genEntropy @160
-    let payload = Json [aesonQQ| {
-            "name": #{name},
-            "mnemonic_sentence": #{mnemonic},
-            "passphrase": #{passphrase},
-            "address_pool_gap" : #{addrPoolGap}
-        }|]
-    r <- request @ApiWallet ctx postWalletEp Default payload
-    expectResponseCode @IO HTTP.status201 r
-    return (getFromResponse id r)
+emptyByronWalletWith = error "TODO: emptyByronWalletWith"
+--    let payload = Json [aesonQQ| {
+--            "name": #{name},
+--            "mnemonic_sentence": #{mnemonic},
+--            "passphrase": #{pass}
+--        }|]
+--    r <- request @ApiByronWallet ctx (postByronWalletEp style) Default payload
+--    expectResponseCode @IO HTTP.status201 r
+--    return (getFromResponse id r)
 
 fixtureRawTx
     :: Context t
@@ -1050,119 +1021,173 @@ fixturePassphrase
 fixturePassphrase =
     "cardano-wallet"
 
--- | Restore a faucet and wait until funds are available.
-fixtureWallet
-    :: Context t
-    -> IO ApiWallet
-fixtureWallet ctx = do
-    mnemonics <- mnemonicToText <$> nextWallet @"shelley" (_faucet ctx)
-    let payload = Json [aesonQQ| {
-            "name": "Faucet Wallet",
-            "mnemonic_sentence": #{mnemonics},
-            "passphrase": #{fixturePassphrase}
-            } |]
-    (_, w) <- unsafeRequest @ApiWallet ctx postWalletEp payload
-    race (threadDelay sixtySeconds) (checkBalance w) >>= \case
-        Left _ -> fail "fixtureWallet: waited too long for initial transaction"
-        Right a -> return a
-  where
-    sixtySeconds = 60*oneSecond
-    checkBalance w = do
-        r <- request @ApiWallet ctx (getWalletEp w) Default Empty
-        if getFromResponse balanceAvailable r > 0
-            then return (getFromResponse id r)
-            else threadDelay oneSecond *> checkBalance w
-
--- | Restore a faucet Random wallet and wait until funds are available.
-fixtureRandomWallet
-    :: Context t
-    -> IO ApiByronWallet
-fixtureRandomWallet ctx = do
-    mnemonics <- mnemonicToText <$> nextWallet @"random" (_faucet ctx)
-    fixtureLegacyWallet ctx "random" mnemonics
-
--- | Restore a faucet Icarus wallet and wait until funds are available.
-fixtureIcarusWallet
-    :: Context t
-    -> IO ApiByronWallet
-fixtureIcarusWallet ctx = do
-    mnemonics <- mnemonicToText <$> nextWallet @"icarus" (_faucet ctx)
-    fixtureLegacyWallet ctx "icarus" mnemonics
-
--- | Restore a legacy wallet (Byron or Icarus)
-fixtureLegacyWallet
-    :: Context t
-    -> Text
-    -> [Text]
-    -> IO ApiByronWallet
-fixtureLegacyWallet ctx style mnemonics = do
-    let payload = Json [aesonQQ| {
-            "name": "Faucet Byron Wallet",
-            "mnemonic_sentence": #{mnemonics},
-            "passphrase": #{fixturePassphrase}
-            } |]
-    (_, w) <- unsafeRequest @ApiByronWallet ctx (postByronWalletEp style) payload
-    race (threadDelay sixtySeconds) (checkBalance w) >>= \case
-        Left _ ->
-            fail "fixtureByronWallet: waited too long for initial transaction"
-        Right a ->
-            return a
-  where
-    sixtySeconds = 60*oneSecond
-    checkBalance w = do
-        r <- request @ApiByronWallet ctx (getByronWalletEp w) Default Empty
-        if getFromResponse byronBalanceAvailable r > 0
-            then return (getFromResponse id r)
-            else threadDelay oneSecond *> checkBalance w
-
--- | Restore a wallet with the given UTxO distribution. Note that there's a
--- limitation to what can be done here. We only have 10 UTxO available in each
--- faucet and they "only" have 'faucetUtxoAmt = 100_000 Ada' in each.
+-- | Restore a funded wallet from a faucet.
 --
--- This function makes no attempt at ensuring the request is valid, so be
--- careful.
-fixtureWalletWith
-    :: Context t
-    -> [Natural]
-    -> IO ApiWallet
-fixtureWalletWith ctx coins0 = do
-    src <- fixtureWallet ctx
-    dest <- emptyWallet ctx
-    mapM_ (moveCoins src dest) (groupsOf 10 coins0)
-    void $ request @() ctx (deleteWalletEp src) Default Empty
-    snd <$> unsafeRequest @ApiWallet ctx (getWalletEp dest) Empty
-  where
-    -- | Move coins from a wallet to another
-    moveCoins
-        :: ApiWallet
-            -- ^ Source Wallet
-        -> ApiWallet
-            -- ^ Destination wallet
+-- 'style' can be one of:
+--
+--    - shelley
+--    - random
+--    - icarus
+--    - ledger
+--
+-- >> fixtureWallet @"shelley" ctx
+-- ApiWallet { ... }
+--
+-- >> fixtureWallet @"random" ctx
+-- ApiByronWallet { ... }
+class
+    ( NextWallet style
+    , KnownSymbol style
+    , FromJSON (FixtureWalletT style)
+    ) => FixtureWallet (style :: Symbol) where
+    type FixtureWalletT style :: *
+
+    -- To be completed by instance
+    fixturePostEndpoint
+        :: (Method, Text)
+
+    -- To be completed by instance
+    fixtureGetEndpoint
+        :: FixtureWalletT style
+        -> (Method, Text)
+
+    -- To be completed by instance
+    fixtureWalletBalance
+        :: Lens' (FixtureWalletT style) (Quantity "lovelace" Natural)
+
+    -- Default generic implementation
+    fixtureWallet
+        :: Context t
+        -> IO (FixtureWalletT style)
+    fixtureWallet ctx = do
+        mnemonics <- mnemonicToText <$> nextWallet @style (_faucet ctx)
+        let name = fixtureWalletName @style
+        let passphrase = fixtureWalletPassphrase @style
+        let payload = Json [aesonQQ| {
+                "name": #{name},
+                "mnemonic_sentence": #{mnemonics},
+                "passphrase": #{passphrase}
+                } |]
+        (_, w) <- unsafeRequest ctx (fixturePostEndpoint @style) payload
+        race (threadDelay sixtySeconds) (checkBalance w) >>= \case
+            Left _ ->
+                fail "fixtureWallet: waited too long for initial transaction"
+            Right a ->
+                return a
+      where
+        sixtySeconds = 60*oneSecond
+        checkBalance w = do
+            r <- request @(FixtureWalletT style) ctx (fixtureGetEndpoint @style w)
+                Default Empty
+            if getFromResponse (fixtureWalletBalance @style) r > 0
+                then return (getFromResponse id r)
+                else threadDelay oneSecond *> checkBalance w
+
+    -- | Like 'fixtureWallet' but allows choosing
+    -- exactly the UTxO of the fixture wallet.
+    --
+    -- The default implementation only provides implementation for empty
+    -- wallets, when no coins are requested.
+    fixtureWalletWith
+        :: Context t
         -> [Natural]
-            -- ^ Coins to move
-        -> IO ()
-    moveCoins src dest coins = do
-        balance <- getFromResponse balanceAvailable
-            <$> request @ApiWallet ctx (getWalletEp dest) Default Empty
-        addrs <- fmap (view #id) . getFromResponse id
-            <$> request @[ApiAddress 'Testnet]
-                ctx (getAddressesEp dest "") Default Empty
-        let payments = for (zip coins addrs) $ \(amt, addr) -> [aesonQQ|{
-                "address": #{addr},
-                "amount": {
-                    "quantity": #{amt},
-                    "unit": "lovelace"
-                }
-            }|]
-        let payload = Json [aesonQQ|{
-                "payments": #{payments :: [Value]},
-                "passphrase": #{fixturePassphrase}
-            }|]
-        request @(ApiTransaction 'Testnet) ctx (postTxEp src) Default payload
-            >>= expectResponseCode HTTP.status202
-        expectEventually'
-            ctx getWalletEp balanceAvailable (sum (balance:coins)) dest
-        expectEventuallyL ctx balanceAvailable balanceTotal src
+        -> IO (FixtureWalletT style)
+    fixtureWalletWith ctx [] = emptyWallet @style ctx
+    fixtureWalletWith _ctx _ = fail "fixtureWalletWith: \
+        \non-null UTxOs fixture not implemented for this type of wallet."
+
+    -- Default generic implementation
+    fixtureWalletName
+        :: Text
+    fixtureWalletName =
+        let style = T.pack $ symbolVal (Proxy @style)
+        in "Fixture " <> style <> " Wallet"
+
+    -- Default generic implementation
+    fixtureWalletPassphrase
+        :: Text
+    fixtureWalletPassphrase =
+        "Secure Passphrase"
+
+-- | Create an empty wallet of the given style.
+emptyWallet
+    :: forall (style :: Symbol) t.
+        ( FixtureWallet style
+        )
+    => Context t
+    -> IO (FixtureWalletT style)
+emptyWallet ctx = do
+    mnemonic <- (mnemonicToText @(MnemonicSize style) . entropyToMnemonic)
+        <$> genEntropy
+    let name = fixtureWalletName @style
+    let passphrase = fixtureWalletPassphrase @style
+    let payload = Json [aesonQQ| {
+            "name": #{name},
+            "mnemonic_sentence": #{mnemonic},
+            "passphrase": #{passphrase}
+        }|]
+    snd <$> unsafeRequest ctx (fixturePostEndpoint @style) payload
+
+instance FixtureWallet "random" where
+    type FixtureWalletT "random" = ApiByronWallet
+    fixtureGetEndpoint   = getByronWalletEp
+    fixturePostEndpoint  = postByronWalletEp @"random"
+    fixtureWalletBalance = #balance . #getApiT . #available
+
+instance FixtureWallet "icarus" where
+    type FixtureWalletT "icarus" = ApiByronWallet
+    fixtureGetEndpoint   = getByronWalletEp
+    fixturePostEndpoint  = postByronWalletEp @"icarus"
+    fixtureWalletBalance = #balance . #getApiT . #available
+
+instance FixtureWallet "shelley" where
+    type FixtureWalletT "shelley" = ApiWallet
+    fixtureGetEndpoint   = getWalletEp
+    fixturePostEndpoint  = postWalletEp
+    fixtureWalletBalance = #balance . #getApiT . #available
+    fixtureWalletWith ctx coins0 = do
+        dest <- emptyWallet @"shelley" ctx
+        case coins0 of
+            [] -> pure ()
+            _  -> do
+                src <- fixtureWallet @"shelley" ctx
+                mapM_ (moveCoins ctx src dest) (groupsOf 10 coins0)
+                void $ request @() ctx (deleteWalletEp src) Default Empty
+        snd <$> unsafeRequest ctx (getWalletEp dest) Empty
+
+-- | Move coins from a wallet to another
+moveCoins
+    :: Context t
+        -- ^ Surrounding context
+    -> ApiWallet
+        -- ^ Source Wallet
+    -> ApiWallet
+        -- ^ Destination wallet
+    -> [Natural]
+        -- ^ Coins to move
+    -> IO ()
+moveCoins ctx src dest coins = do
+    balance <- getFromResponse balanceAvailable
+        <$> request @ApiWallet ctx (getWalletEp dest) Default Empty
+    addrs <- fmap (view #id) . getFromResponse id
+        <$> request @[ApiAddress 'Testnet] ctx (getAddressesEp dest "") Default Empty
+    let passphrase = fixtureWalletPassphrase @"shelley"
+    let payments = for (zip coins addrs) $ \(amt, addr) -> [aesonQQ|{
+            "address": #{addr},
+            "amount": {
+                "quantity": #{amt},
+                "unit": "lovelace"
+            }
+        }|]
+    let payload = Json [aesonQQ|{
+            "payments": #{payments :: [Value]},
+            "passphrase": #{passphrase}
+        }|]
+    request @(ApiTransaction 'Testnet) ctx (postTxEp src) Default payload
+        >>= expectResponseCode HTTP.status202
+    expectEventually' ctx getWalletEp balanceAvailable (sum (balance:coins)) dest
+    expectEventuallyL ctx balanceAvailable balanceTotal src
+
 
 -- | Total amount on each faucet wallet
 faucetAmt :: Natural
@@ -1360,10 +1385,13 @@ networkInfoEp =
     , "v2/network/information"
     )
 
-postByronWalletEp :: Text -> (Method, Text)
-postByronWalletEp style =
+postByronWalletEp
+    :: forall (style :: Symbol).
+        (KnownSymbol style)
+    => (Method, Text)
+postByronWalletEp =
     ( "POST"
-    , "v2/byron-wallets/" <> style
+    , "v2/byron-wallets/" <> T.pack (symbolVal $ Proxy @style)
     )
 
 listByronWalletsEp :: (Method, Text)
@@ -1398,7 +1426,9 @@ calculateByronMigrationCostEp w =
     , "v2/byron-wallets/" <> w ^. walletId <> "/migrations"
     )
 
-getByronWalletEp :: ApiByronWallet -> (Method, Text)
+getByronWalletEp :: forall w. (HasType (ApiT WalletId) w)
+    => w
+    -> (Method, Text)
 getByronWalletEp w =
     ( "GET"
     , "v2/byron-wallets/" <> w ^. walletId
@@ -1478,7 +1508,7 @@ postExternalTxEp =
     , "v2/proxy/transactions"
     )
 
-getWalletEp :: ApiWallet -> (Method, Text)
+getWalletEp :: HasType (ApiT WalletId) w => w -> (Method, Text)
 getWalletEp w =
     ( "GET"
     , "v2/wallets/" <> w ^. walletId
@@ -1490,7 +1520,7 @@ listWalletsEp =
     , "v2/wallets"
     )
 
-deleteWalletEp :: ApiWallet -> (Method, Text)
+deleteWalletEp :: HasType (ApiT WalletId) s => s -> (Method, Text)
 deleteWalletEp w =
     ( "DELETE"
     , "v2/wallets/" <> w ^. walletId
@@ -1502,13 +1532,13 @@ getWalletUtxoEp w =
     , "v2/wallets/" <> w ^. walletId <> "/statistics/utxos"
     )
 
-getAddressesEp :: ApiWallet -> Text -> (Method, Text)
+getAddressesEp :: HasType (ApiT WalletId) s => s -> Text -> (Method, Text)
 getAddressesEp w stateFilter =
     ( "GET"
     , "v2/wallets/" <> w ^. walletId <> "/addresses" <> stateFilter
     )
 
-postTxEp :: ApiWallet -> (Method, Text)
+postTxEp :: HasType (ApiT WalletId) s => s -> (Method, Text)
 postTxEp w =
     ( "POST"
     , "v2/wallets/" <> w ^. walletId <> "/transactions"

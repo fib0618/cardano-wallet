@@ -1,10 +1,15 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableSuperClasses #-}
 
 module Test.Integration.Faucet
     ( Faucet (..)
+    , NextWallet
+    , MnemonicSize
     , nextWallet
     , nextTxBuilder
     ) where
@@ -12,7 +17,13 @@ module Test.Integration.Faucet
 import Prelude
 
 import Cardano.Wallet.Primitive.Mnemonic
-    ( Mnemonic )
+    ( CheckSumBits
+    , ConsistentEntropy
+    , EntropySize
+    , Mnemonic
+    , ValidChecksumSize
+    , ValidEntropySize
+    )
 import Cardano.Wallet.Primitive.Types
     ( Address, Coin )
 import Control.Concurrent.MVar
@@ -43,9 +54,21 @@ nextTxBuilder (Faucet _ _ _ mvar) =
 
 -- | Get the next faucet wallet. Requires the 'initFaucet' to be called in order
 -- to get a hand on a 'Faucet'.
-class NextWallet (scheme :: Symbol) where
-    type MnemonicSize scheme :: Nat
-    nextWallet :: Faucet -> IO (Mnemonic (MnemonicSize scheme))
+class
+    ( ValidChecksumSize
+        (EntropySize (MnemonicSize s))
+        (CheckSumBits (EntropySize (MnemonicSize s)))
+
+    , ValidEntropySize
+        (EntropySize (MnemonicSize s))
+
+    , ConsistentEntropy
+        (EntropySize (MnemonicSize s))
+        (MnemonicSize s)
+        (CheckSumBits (EntropySize (MnemonicSize s)))
+    ) => NextWallet (s :: Symbol) where
+    type MnemonicSize s :: Nat
+    nextWallet :: Faucet -> IO (Mnemonic (MnemonicSize s))
 
 instance NextWallet "shelley" where
     type MnemonicSize "shelley" = 15

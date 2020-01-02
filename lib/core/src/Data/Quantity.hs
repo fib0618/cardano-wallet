@@ -86,7 +86,7 @@ import qualified Data.Text as T
 -- {"unit":"lovelace","quantity":14}
 newtype Quantity (unit :: Symbol) a = Quantity { getQuantity :: a }
     deriving stock (Generic, Show, Eq, Ord)
-    deriving newtype (Bounded, Enum)
+    deriving newtype (Bounded, Enum, Num)
 
 instance Functor (Quantity any) where
     fmap f (Quantity a) = Quantity (f a)
