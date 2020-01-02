@@ -17,10 +17,12 @@ Good to read before / additional resources:
 -}
 
 module Cardano.Wallet.Shelley.Network
-    ( runExperiment
-    , point1
+    ( point1
       -- * Top-Level Interface
     , ChainParameters (..)
+    , mkNetworkLayer
+    , withNetworkLayer
+    , UseRunningOrLaunch (..)
 
     -- * Re-Export
     , EpochSlots (..)
@@ -37,17 +39,43 @@ module Cardano.Wallet.Shelley.Network
 
 import Prelude
 
+import Cardano.BM.Trace
+    ( Trace, nullTracer )
 import Cardano.Chain.Slotting
     ( EpochSlots (..) )
 import Cardano.Crypto
     ( ProtocolMagicId (..) )
+import Cardano.Launcher
+    ( Command (..), StdStream, withBackendProcess )
+import Cardano.Wallet.Logging
+    ( transformTextTrace )
 import Cardano.Wallet.Network
+import Cardano.Wallet.Primitive.Types
+    ( Hash (..) )
 import Codec.SerialiseTerm
     ( CodecCBORTerm )
+import Control.Exception
+    ( catch, throwIO )
+import Control.Monad.Class.MonadST
+    ( MonadST )
+import Control.Monad.Class.MonadThrow
+    ( MonadThrow )
+import Control.Monad.Class.MonadTimer
+    ( MonadTimer )
+import Control.Tracer
+    ( Tracer, contramap )
+import Data.ByteString.Lazy
+    ( ByteString )
+import Data.Text
+    ( Text )
+import Data.Void
+    ( Void )
 import Network.Mux.Interface
     ( AppType (..) )
 import Network.Mux.Types
     ( MuxError )
+import Network.Socket
+    ( AddrInfo (..), Family (..), SockAddr (..), SocketType (..) )
 import Network.TypedProtocol.Channel
     ( Channel )
 import Network.TypedProtocol.Codec
@@ -105,38 +133,12 @@ import Ouroboros.Network.Protocol.LocalTxSubmission.Codec
 import Ouroboros.Network.Protocol.LocalTxSubmission.Type
     ( LocalTxSubmission )
 
-import Control.Exception
-    ( catch, throwIO )
-import Control.Monad.Class.MonadST
-    ( MonadST )
-import Control.Monad.Class.MonadThrow
-    ( MonadThrow )
-import Control.Monad.Class.MonadTimer
-    ( MonadTimer )
-import Control.Tracer
-    ( Tracer, contramap )
-import Data.ByteString.Lazy
-    ( ByteString )
-import Data.Text
-    ( Text )
-import Data.Void
-    ( Void )
-import Network.Socket
-    ( AddrInfo (..), Family (..), SockAddr (..), SocketType (..) )
-
 import qualified Cardano.Crypto as CC
 import qualified Codec.Serialise as CBOR
 import qualified Network.Socket as Socket
 import qualified Ouroboros.Network.Block as O
 import qualified Ouroboros.Network.Point as Point
 
--- ----------------
--- Development
-
-import Cardano.BM.Trace
-    ( nullTracer )
-import Control.Monad
-    ( (>=>) )
 
 -- A point where there is high activity on the mainnet
 point1 :: Point ByronBlock
@@ -149,35 +151,122 @@ point1 =
         (O.SlotNo slot)
         (ByronHash h)
 
--- How to run the node:
 --
--- $ git clone https://github.com/input-output-hk/cardano-node
--- $ cd cardano-node
--- $ ./scripts/mainnet.sh
 --
--- Then run main:
-runExperiment
-    :: Point ByronBlock
-       -- ^ Point to start fetching blocks from
-    -> Int
-       -- ^ How many blocks to fetch
-    -> (ByronBlock -> IO ())
-       -- ^ Roll-forward
-    -> (Point ByronBlock -> IO ())
-       -- ^ Roll-backward
-    -> IO ()
-runExperiment start n rollForward rollBackward = do
-    -- I have cardano-node running from ../cardano-node
-    let nodeId = CoreNodeId 0
-    let path = "../cardano-node/socket/" <> (localSocketFilePath nodeId)
-    let addr =  localSocketAddrInfo path
+--
 
-    let params = ChainParameters
-         { epochSlots = EpochSlots 21600
-         , protocolMagic = ProtocolMagicId 764824073
-         }
+-- | Whether to start Jormungandr with the given config, or to connect to an
+-- already running Jormungandr REST API using the given parameters.
+data UseRunningOrLaunch
+    = UseRunning ConnectionParams
+    | Launch LaunchConfig
+    deriving (Show, Eq)
 
+-- | Parameters for connecting to a Jormungandr REST API.
+data ConnectionParams = ConnectionParams
+    { block0H :: Hash "Genesis" -- NOTE: Do we really need this?
+    , chainParams :: ChainParameters
+    , socket :: AddrInfo -- ^ Socket for communicating with the node
+    }
+    deriving (Show, Eq)
+
+-- | A subset of the Jormungandr configuration parameters, used for starting the
+-- Jormungandr node backend.
+newtype LaunchConfig = LaunchConfig
+    { outputStream :: StdStream
+    }
+    deriving (Show, Eq)
+
+data ErrStartup
+
+-- | Starts the network layer and runs the given action with a
+-- 'NetworkLayer'. The caller is responsible for handling errors which may have
+-- occurred while starting the Node.
+withNetworkLayer
+    :: forall a t. ()
+    => Trace IO Text
+    -- ^ Logging
+    -> UseRunningOrLaunch
+    -- ^ How Jörmungandr is started.
+    -> (Either ErrStartup (ConnectionParams, NetworkLayer IO t ByronBlock) -> IO a)
+    -- ^ The action to run. It will be passed the connection parameters used,
+    -- and a network layer if startup was successful.
+    -> IO a
+withNetworkLayer tr (UseRunning cp) action = withNetworkLayerConn tr cp action
+withNetworkLayer tr (Launch lj) action = withNetworkLayerLaunch tr lj action
+
+withNetworkLayerLaunch
+    :: forall a t. ()
+    => Trace IO Text
+    -- ^ Logging of node startup.
+    -> LaunchConfig
+    -- ^ Configuration for starting J√∂rmungandr.
+    -> (Either ErrStartup (ConnectionParams, NetworkLayer IO t ByronBlock) -> IO a)
+    -- ^ The action to run. It will be passed the connection parameters used,
+    -- and a network layer if startup was successful.
+    -> IO a
+withNetworkLayerLaunch tr lj action = do
+    withNode tr lj $ \cp -> withNetworkLayerConn tr cp action
+
+
+withNode
+    :: Trace IO Text
+    -> LaunchConfig
+    -> (ConnectionParams -> IO a)
+    -> IO a
+withNode tr launchConfig action = do
+    let args = []
+    let cmd = Command
+            "../cardano-node/scripts/mainnet.sh"
+            args
+            (return ())
+            (outputStream launchConfig)
+    let tr' = transformTextTrace tr
+    res <- withBackendProcess tr' cmd $ do
+
+        -- I have cardano-node running from ../cardano-node
+        let nodeId = CoreNodeId 0
+        let path = "../cardano-node/socket/" <> (localSocketFilePath nodeId)
+        let addr =  localSocketAddrInfo path
+
+        let params = ChainParameters
+             { epochSlots = EpochSlots 21600
+             , protocolMagic = ProtocolMagicId 764824073
+             }
+        let block0 = Hash "f0f7892b5c333cffc4b3c4344de48af4cc63f55e44936196f365a9ef2244134f"
+        -- ^ is this correct?
+        action $ ConnectionParams block0 params addr
+    return $ either (error "startup failed (todo: proper error)") id res
+
+withNetworkLayerConn
+    :: forall a t. ()
+    => Trace IO Text
+    -- ^ Logging of network layer startup
+    -> ConnectionParams
+    -- ^ Parameters for connecting to J√∂rmungandr node which is already running.
+    -> (Either ErrStartup (ConnectionParams, NetworkLayer IO t ByronBlock) -> IO a)
+    -- ^ Action to run with the network layer.
+    -> IO a
+withNetworkLayerConn tr connectionParams action = do
+    nw <- newNetworkLayer tr connectionParams
+    action $ Right (connectionParams, nw)
+
+-- | Creates a new 'NetworkLayer' connecting to an underlying 'Jormungandr'
+-- backend target.
+newNetworkLayer
+    :: forall t. ()
+    => Trace IO Text
+    -> ConnectionParams
+    -> IO (NetworkLayer IO t ByronBlock)
+newNetworkLayer _tr (ConnectionParams _ params addr)= do
+    -- TODO: Note we are discarding the tracer here
     let t = nullTracer
+
+    let rollForward _ = return ()
+    let rollBackward _ = return ()
+
+    let start = error "todo: point"
+
     let client = OuroborosInitiatorApplication $ \pid -> \case
             ChainSyncWithBlocksPtcl ->
                 chainSyncWithBlocks
@@ -185,11 +274,52 @@ runExperiment start n rollForward rollBackward = do
                     rollForward
                     rollBackward
                     start
-                    n
-
             LocalTxSubmissionPtcl ->
                 localTxSubmission pid t
     connectClient client dummyNodeToClientVersion addr
+
+    --liftIO $ waitForService "J√∂rmungandr" tr (Port $ baseUrlPort baseUrl) $
+    --    waitForNetwork (void $ getTipId jor) defaultRetryPolicy
+
+    -- (block0, bp) <- getInitialBlockchainParameters jor (coerce block0H)
+    return $ mkNetworkLayer 10
+
+--------------------------------------------------------------------------------
+--
+-- NetworkLayer
+
+mkNetworkLayer
+    :: forall m t block. ()
+    => Word
+        -- ^ Batch size when fetching blocks from Jörmungandr
+    -> NetworkLayer m t block
+mkNetworkLayer _batchSize = NetworkLayer
+    { networkTip =
+        error ""
+
+    , findIntersection =
+        error ""
+
+    , nextBlocks =
+        error ""
+
+    , initCursor =
+        error ""
+
+    , cursorSlotId =
+        error ""
+
+    , postTx =
+        error ""
+
+    , staticBlockchainParameters =
+        error ""
+
+    , stakeDistribution =
+        error "stakeDistribution"
+    , getAccountBalance =
+        error "getAccountBalance not implemented in Byron. TODO: return 0?"
+    }
 
 --------------------------------------------------------------------------------
 --
@@ -202,7 +332,7 @@ data ChainParameters = ChainParameters
         -- ^ Number of slots per epoch.
     , protocolMagic :: ProtocolMagicId
         -- ^ Protocol magic (e.g. mainnet=764824073, testnet=1097911063)
-    }
+    } deriving (Eq, Show)
 
 -- | Type representing a network client running two mini-protocols to sync
 -- from the chain and, submit transactions.
@@ -286,14 +416,12 @@ chainSyncWithBlocks
         -- ^ Action to take when receiving a block
     -> Point ByronBlock
         -- ^ Starting point
-    -> Int
-        -- ^ How many blocks to fetch
     -> Channel m ByteString
         -- ^ A 'Channel' is a abstract communication instrument which
         -- transports serialized messages between peers (e.g. a unix
         -- socket).
     -> m Void
-chainSyncWithBlocks pid t params forward backward startPoint limit channel =
+chainSyncWithBlocks pid t params forward backward startPoint channel =
     runPeer trace codec pid channel (chainSyncClientPeer client)
   where
     trace :: Tracer m (TraceSendRecv protocol peerId DeserialiseFailure)

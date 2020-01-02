@@ -63,6 +63,5 @@ library
       src
   exposed-modules:
       Cardano.Wallet.Shelley.Network
-      Cardano.Wallet.Shelley.Prototype1
       Cardano.Wallet.Shelley.Transaction
       Cardano.Wallet.Shelley

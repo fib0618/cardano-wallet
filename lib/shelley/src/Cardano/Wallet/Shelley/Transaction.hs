@@ -13,43 +13,17 @@ module Cardano.Wallet.Shelley.Transaction
 
 import Prelude
 
-import Cardano.Wallet.Primitive.AddressDerivation
-    ( Depth, WalletKey (..), toChimericAccount )
-import Cardano.Wallet.Primitive.AddressDerivation.Byron
-    ( ByronKey )
-import Cardano.Wallet.Primitive.AddressDerivation.Shelley
-    ( ShelleyKey )
-import Cardano.Wallet.Primitive.CoinSelection
-    ( CoinSelection (..) )
 import Cardano.Wallet.Primitive.Types
-    ( Hash (..), SealedTx (..), Tx (..), TxOut (..) )
+    ( Hash (..) )
 import Cardano.Wallet.Transaction
-    ( ErrDecodeSignedTx (..)
-    , ErrMkTx (..)
-    , ErrValidateSelection
-    , TransactionLayer (..)
-    )
-import Control.Arrow
-    ( first, second )
-import Control.Monad
-    ( forM, when )
-import Data.Either.Combinators
-    ( maybeToRight )
-import Data.Quantity
-    ( Quantity (..) )
-import Data.Text.Class
-    ( toText )
-import Fmt
-    ( Buildable (..) )
-
-import qualified Data.ByteString.Lazy as BL
+    ( TransactionLayer (..) )
 
 -- | Construct a 'TransactionLayer' compatible with Shelley and 'Jörmungandr'
 newTransactionLayer
-    :: forall k t. ( WalletKey k)
+    :: forall k t. ()
     => Hash "Genesis"
     -> TransactionLayer t k
-newTransactionLayer block0H = TransactionLayer
+newTransactionLayer _block0H = TransactionLayer
     { mkStdTx = error "mkStdTx to be implemented"
     , mkDelegationJoinTx = error "mkDelegationJoinTx to be implemented"
     , mkDelegationQuitTx = error "mkDelegationQuitTx to be implemented"
