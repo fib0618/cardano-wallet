@@ -255,7 +255,8 @@ convertTx tx = W.Tx
 
     convertTxIn (CC.TxInUtxo txH idx) = (W.TxIn (convertHash txH) idx, coin)
        where
-          coin = error "1. We can't get the coin of Byron inputs!"
+          coin = W.Coin 0
+          -- TODO: error "1. We can't get the coin of Byron inputs!"
 
     convertTxOut o = W.TxOut
         (convertAddr $ CC.txOutAddress o)

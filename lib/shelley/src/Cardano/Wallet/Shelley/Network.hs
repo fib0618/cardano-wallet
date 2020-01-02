@@ -2,6 +2,7 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 --{-# OPTIONS_GHC -fno-warn-unused-imports -fno-warn-redundant-constraints
 --   -fno-warn-unused-matches -fno-warn-unused-local-binds #-}
@@ -23,6 +24,9 @@ module Cardano.Wallet.Shelley.Network
     , mkNetworkLayer
     , withNetworkLayer
     , UseRunningOrLaunch (..)
+    , LaunchConfig (..)
+    , ConnectionParams (..)
+    , mainnetConnectionParams
 
     -- * Re-Export
     , EpochSlots (..)
@@ -98,7 +102,7 @@ import Ouroboros.Consensus.Ledger.Byron
 import Ouroboros.Consensus.NodeId
     ( CoreNodeId (..) )
 import Ouroboros.Network.Block
-    ( Point, Tip (..) )
+    ( Point, Tip (..), genesisPoint )
 import Ouroboros.Network.Magic
     ( NetworkMagic (..) )
 import Ouroboros.Network.Mux
@@ -208,6 +212,23 @@ withNetworkLayerLaunch
 withNetworkLayerLaunch tr lj action = do
     withNode tr lj $ \cp -> withNetworkLayerConn tr cp action
 
+mainnetConnectionParams :: ConnectionParams
+mainnetConnectionParams =
+    let
+        -- I have cardano-node running from ../cardano-node
+        nodeId = CoreNodeId 0
+        path = "../cardano-node/socket/" <> (localSocketFilePath nodeId)
+        addr =  localSocketAddrInfo path
+
+        params = ChainParameters
+             { epochSlots = EpochSlots 21600
+             , protocolMagic = ProtocolMagicId 764824073
+             }
+        block0 = Hash "f0f7892b5c333cffc4b3c4344de48af4cc63f55e44936196f365a9ef2244134f"
+        -- ^ is this correct?
+    in
+        ConnectionParams block0 params addr
+
 
 withNode
     :: Trace IO Text
@@ -223,19 +244,7 @@ withNode tr launchConfig action = do
             (outputStream launchConfig)
     let tr' = transformTextTrace tr
     res <- withBackendProcess tr' cmd $ do
-
-        -- I have cardano-node running from ../cardano-node
-        let nodeId = CoreNodeId 0
-        let path = "../cardano-node/socket/" <> (localSocketFilePath nodeId)
-        let addr =  localSocketAddrInfo path
-
-        let params = ChainParameters
-             { epochSlots = EpochSlots 21600
-             , protocolMagic = ProtocolMagicId 764824073
-             }
-        let block0 = Hash "f0f7892b5c333cffc4b3c4344de48af4cc63f55e44936196f365a9ef2244134f"
-        -- ^ is this correct?
-        action $ ConnectionParams block0 params addr
+        action mainnetConnectionParams
     return $ either (error "startup failed (todo: proper error)") id res
 
 withNetworkLayerConn
@@ -265,7 +274,6 @@ newNetworkLayer _tr (ConnectionParams _ params addr)= do
     let rollForward _ = return ()
     let rollBackward _ = return ()
 
-    let start = error "todo: point"
 
     let client = OuroborosInitiatorApplication $ \pid -> \case
             ChainSyncWithBlocksPtcl ->
@@ -273,7 +281,7 @@ newNetworkLayer _tr (ConnectionParams _ params addr)= do
                     pid t params
                     rollForward
                     rollBackward
-                    start
+                    genesisPoint
             LocalTxSubmissionPtcl ->
                 localTxSubmission pid t
     connectClient client dummyNodeToClientVersion addr
@@ -295,7 +303,7 @@ mkNetworkLayer
     -> NetworkLayer m t block
 mkNetworkLayer _batchSize = NetworkLayer
     { networkTip =
-        error ""
+        error "networkTip unimplemented"
 
     , findIntersection =
         error ""
