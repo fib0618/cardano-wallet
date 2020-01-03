@@ -186,18 +186,14 @@ instance Buildable s => Buildable (Wallet s) where
 -- The wallet tip will be set to the header of the applied genesis block.
 initWallet
     :: (IsOurs s Address, IsOurs s ChimericAccount, NFData s, Show s)
-    => Block
-        -- ^ The genesis block
+    => BlockHeader
     -> BlockchainParameters
         -- ^ Initial blockchain parameters
     -> s
         -- ^ Initial address discovery state
     -> ([(Tx, TxMeta)], Wallet s)
-initWallet block bp s =
-    let
-        ((FilteredBlock _ txs, u), s') = prefilterBlock block mempty s
-    in
-        (txs, Wallet u (header block) s' bp)
+initWallet header bp s =
+        (mempty, Wallet mempty header s bp)
 
 -- | Constructs a wallet from the exact given state. Using this function instead
 -- of 'initWallet' and 'applyBlock' allows the wallet invariants to be

@@ -219,7 +219,7 @@ newStakePoolLayer tr db@DBLayer{..} nl metadataDir = StakePoolLayer
         nodeTip <- withExceptT ErrListStakePoolsErrNetworkTip
             $ networkTip nl
         let nodeEpoch = nodeTip ^. #slotId . #epochNumber
-        let genesisEpoch = block0 ^. #header . #slotId . #epochNumber
+        let genesisEpoch = 0
 
         (distr, prod, prodTip) <- liftIO . atomically $ (,,)
             <$> (Map.fromList <$> readStakeDistribution nodeEpoch)
@@ -263,7 +263,8 @@ newStakePoolLayer tr db@DBLayer{..} nl metadataDir = StakePoolLayer
                 mapM_ (logTrace tr . fst) res
                 pure $ map snd res
 
-    (block0, bp) = staticBlockchainParameters nl
+    block0 = error "TODO: can we manage without block0?"
+    bp = staticBlockchainParameters nl
     epochLength = bp ^. #getEpochLength
     activeSlotCoeff = bp ^. #getActiveSlotCoefficient
 

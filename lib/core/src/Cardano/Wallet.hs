@@ -350,7 +350,7 @@ import qualified Data.Set as Set
 data WalletLayer s t (k :: Depth -> * -> *)
     = WalletLayer
         (Trace IO Text)
-        (Block, BlockchainParameters, SyncTolerance)
+        (BlockHeader, BlockchainParameters, SyncTolerance)
         (NetworkLayer IO Block)
         (TransactionLayer t k)
         (DBLayer IO s k)
@@ -388,7 +388,7 @@ data WalletLayer s t (k :: Depth -> * -> *)
 -- and their metadata does not require any networking layer.
 type HasDBLayer s k = HasType (DBLayer IO s k)
 
-type HasGenesisData = HasType (Block, BlockchainParameters, SyncTolerance)
+type HasGenesisData = HasType (BlockHeader, BlockchainParameters, SyncTolerance)
 
 type HasLogger = HasType (Trace IO Text)
 
@@ -406,9 +406,9 @@ dbLayer =
 
 genesisData
     :: forall ctx. HasGenesisData ctx
-    => Lens' ctx (Block, BlockchainParameters, SyncTolerance)
+    => Lens' ctx (BlockHeader, BlockchainParameters, SyncTolerance)
 genesisData =
-    typed @(Block, BlockchainParameters, SyncTolerance)
+    typed @(BlockHeader, BlockchainParameters, SyncTolerance)
 
 logger
     :: forall ctx. HasLogger ctx
@@ -448,7 +448,7 @@ createWallet
     -> s
     -> ExceptT ErrWalletAlreadyExists IO WalletId
 createWallet ctx wid wname s = db & \DBLayer{..} -> do
-    let (hist, cp) = initWallet block0 bp s
+    let (hist, cp) = initWallet h bp s
     now <- lift getCurrentTime
     let meta = WalletMetadata
             { name = wname
@@ -460,7 +460,7 @@ createWallet ctx wid wname s = db & \DBLayer{..} -> do
         initializeWallet (PrimaryKey wid) cp meta hist $> wid
   where
     db = ctx ^. dbLayer @s @k
-    (block0, bp, _) = ctx ^. genesisData
+    (h, bp, _) = ctx ^. genesisData
 
 -- | Retrieve the wallet state for the wallet with the given ID.
 readWallet

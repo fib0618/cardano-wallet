@@ -57,6 +57,7 @@ library
     , serialise
     , stm
     , text
+    , time
     , transformers
     , typed-protocols
     , typed-protocols-cbor

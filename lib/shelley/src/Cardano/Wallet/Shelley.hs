@@ -121,6 +121,7 @@ import qualified Cardano.Wallet.Api.Server as Server
 import qualified Cardano.Wallet.DB.Sqlite as Sqlite
 import qualified Cardano.Wallet.Primitive.Types as W
 import qualified Data.ByteArray as BA
+import qualified Data.ByteString as BS
 import qualified Data.List.NonEmpty as NE
 import qualified Network.Wai.Handler.Warp as Warp
 import qualified Ouroboros.Consensus.Ledger.Byron as O
@@ -174,7 +175,7 @@ serveWallet
     serveApp socket = withNetworkLayer trText lj $ \case
         Left _e -> error "handleNetworkStartupError e"
         Right (_cp, nl) -> do
-            let (_, bp) = staticBlockchainParameters nl
+            let bp = staticBlockchainParameters nl
             let rndTl = newTransactionLayer (getGenesisBlockHash bp)
             let seqTl = newTransactionLayer (getGenesisBlockHash bp)
             let spl = dummyStakePoolLayer
@@ -213,11 +214,13 @@ serveWallet
         -> NetworkLayer IO Block
         -> IO (ApiLayer s t k)
     apiLayer tracer tl nl = do
-        let (block0, bp) = staticBlockchainParameters nl
+        let bp = staticBlockchainParameters nl
         wallets <- maybe (pure []) (Sqlite.findDatabases @k trText) databaseDir
         db <- Sqlite.newDBFactory cfg trText databaseDir
+        let invalidH = W.Hash $ BS.pack $ replicate 32 0
+        let header0 = BlockHeader (W.SlotId 0 0) (Quantity 0) invalidH invalidH
         Server.newApiLayer
-            tracer (block0, bp, sTolerance) nl tl db wallets
+            tracer (header0, bp, sTolerance) nl tl db wallets
 
     dummyStakePoolLayer :: StakePoolLayer IO
     dummyStakePoolLayer = StakePoolLayer

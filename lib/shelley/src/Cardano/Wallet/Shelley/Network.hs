@@ -44,7 +44,7 @@ module Cardano.Wallet.Shelley.Network
 import Prelude
 
 import Cardano.BM.Trace
-    ( Trace, nullTracer )
+    ( Trace, logInfo, nullTracer )
 import Cardano.Chain.Slotting
     ( EpochSlots (..) )
 import Cardano.Crypto
@@ -157,6 +157,7 @@ import Ouroboros.Network.Protocol.LocalTxSubmission.Type
 import qualified Cardano.Crypto as CC
 import qualified Codec.Serialise as CBOR
 import qualified Crypto.Hash as Crypto
+import qualified Data.ByteString as BS
 import qualified Network.Socket as Socket
 import qualified Ouroboros.Network.Block as O
 import qualified Ouroboros.Network.Point as Point
@@ -237,7 +238,7 @@ mainnetConnectionParams =
     let
         -- I have cardano-node running from ../cardano-node
         nodeId = CoreNodeId 0
-        path = "~/IOHK/cardano-node/socket/" <> (localSocketFilePath nodeId)
+        path = "/Users/anviking/IOHK/cardano-node/socket/" <> (localSocketFilePath nodeId)
         addr =  localSocketAddrInfo path
 
         params = ChainParameters
@@ -296,7 +297,7 @@ byronBlockchainParameters
      :: Network
      -> BlockchainParameters
 byronBlockchainParameters n = BlockchainParameters
-     { getGenesisBlockHash = Hash "genesis"
+     { getGenesisBlockHash = Hash $ BS.pack $ replicate 32 0
      , getGenesisBlockDate = case n of
          Mainnet -> StartTime $ posixSecondsToUTCTime 1506203091
          Testnet -> StartTime $ posixSecondsToUTCTime 1563999616
@@ -314,17 +315,18 @@ newNetworkLayer
     :: Trace IO Text
     -> ConnectionParams
     -> IO (NetworkLayer IO ByronBlock)
-newNetworkLayer _tr (ConnectionParams _ params addr)= do
+newNetworkLayer tr (ConnectionParams _ params addr)= do
     -- TODO: Note we are discarding the tracer here
     let t = nullTracer
     return $ NetworkLayer
         { follow = \knownPoints action -> do
             print ("follow"::String)
+            logInfo tr "following starting"
             let client = OuroborosInitiatorApplication $ \pid -> \case
                     ChainSyncWithBlocksPtcl ->
                         chainSyncWithBlocks
                             pid t params
-                            action
+                            (\x -> logInfo tr "follower stepping..." >> action x)
                             (map toPoint knownPoints)
                     LocalTxSubmissionPtcl ->
                         localTxSubmission pid t
@@ -338,13 +340,13 @@ newNetworkLayer _tr (ConnectionParams _ params addr)= do
             error ""
 
         , staticBlockchainParameters =
-            let block0 =
-            (block0, byronBlockchainParameters Testnet)
+            (byronBlockchainParameters Testnet)
 
         , stakeDistribution =
             error "stakeDistribution"
         , getAccountBalance =
-            error "getAccountBalance not implemented in Byron. TODO: return 0?"
+            -- error "getAccountBalance not implemented in Byron. TODO: return 0?"
+            const . return . Quantity $ 0
         }
 
   where

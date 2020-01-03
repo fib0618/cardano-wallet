@@ -162,6 +162,7 @@ import Cardano.Wallet.Primitive.Types
     ( Address
     , AddressState
     , Block
+    , BlockHeader (..)
     , BlockchainParameters
     , ChimericAccount (..)
     , Coin (..)
@@ -1362,7 +1363,7 @@ getWalletTip wallet = ApiBlockReference
 newApiLayer
     :: forall ctx s t k. ctx ~ ApiLayer s t k
     => Trace IO Text
-    -> (Block, BlockchainParameters, SyncTolerance)
+    -> (BlockHeader, BlockchainParameters, SyncTolerance)
     -> NetworkLayer IO Block
     -> TransactionLayer t k
     -> DBFactory IO s k

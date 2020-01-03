@@ -37,8 +37,6 @@ import Cardano.Wallet.Primitive.Types
     , SealedTx
     , SlotId
     )
-import Control.Arrow
-    ( first )
 import Control.Exception
     ( Exception (..) )
 import Control.Monad.Trans.Except
@@ -79,7 +77,7 @@ data NetworkLayer m block = NetworkLayer
         -- ^ Broadcast a transaction to the chain producer
 
     , staticBlockchainParameters
-        :: (block, BlockchainParameters)
+        :: BlockchainParameters
         -- ^ Get the genesis block and blockchain parameters.
 
     , stakeDistribution
@@ -95,7 +93,6 @@ data NetworkLayer m block = NetworkLayer
 instance Functor m => Functor (NetworkLayer m) where
     fmap f nl = nl
         { follow = \start step -> follow nl start (step . fmap f)
-        , staticBlockchainParameters = first f $ staticBlockchainParameters nl
         }
 
 {-------------------------------------------------------------------------------
