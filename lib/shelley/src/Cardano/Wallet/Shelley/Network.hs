@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 --{-# OPTIONS_GHC -fno-warn-unused-imports -fno-warn-redundant-constraints
@@ -17,9 +18,9 @@ Good to read before / additional resources:
 -}
 
 module Cardano.Wallet.Shelley.Network
-    ( point1
+    (
       -- * Top-Level Interface
-    , ChainParameters (..)
+      ChainParameters (..)
     , withNetworkLayer
     , UseRunningOrLaunch (..)
     , LaunchConfig (..)
@@ -43,8 +44,11 @@ module Cardano.Wallet.Shelley.Network
 
 import Prelude
 
+import Cardano.BM.Data.LogItem
+    ( LOContent (LogMessage) )
 import Cardano.BM.Trace
     ( Trace, logInfo, nullTracer )
+import Cardano.BM.Tracing
 import Cardano.Chain.Slotting
     ( EpochSlots (..) )
 import Cardano.Crypto
@@ -158,25 +162,10 @@ import qualified Cardano.Crypto as CC
 import qualified Codec.Serialise as CBOR
 import qualified Crypto.Hash as Crypto
 import qualified Data.ByteString as BS
+import qualified Data.Text as T
 import qualified Network.Socket as Socket
 import qualified Ouroboros.Network.Block as O
 import qualified Ouroboros.Network.Point as Point
-
-
--- A point where there is high activity on the mainnet
-point1 :: Point ByronBlock
-point1 =
-    let
-        Right h = CC.decodeAbstractHash "8a7505ec268a934c9c532fcf21185baf849c0de04a6d12cdf80b0fc45fe6ecb3"
-        slot = 21600*19+6540
-
-    in O.Point $ Point.block
-        (O.SlotNo slot)
-        (ByronHash h)
-
---
---
---
 
 data Network = Mainnet | Testnet
 
@@ -316,22 +305,20 @@ newNetworkLayer
     -> ConnectionParams
     -> IO (NetworkLayer IO ByronBlock)
 newNetworkLayer tr (ConnectionParams _ params addr)= do
-    -- TODO: Note we are discarding the tracer here
-    let t = nullTracer
     return $ NetworkLayer
         { follow = \knownPoints action -> do
-            print ("follow"::String)
             logInfo tr "following starting"
+            tr' <- ourobourosTrace tr
+            tr'' <- ourobourosTrace tr
             let client = OuroborosInitiatorApplication $ \pid -> \case
                     ChainSyncWithBlocksPtcl ->
                         chainSyncWithBlocks
-                            pid t params
+                            pid tr' params
                             (\x -> logInfo tr "follower stepping..." >> action x)
                             (map toPoint knownPoints)
                     LocalTxSubmissionPtcl ->
-                        localTxSubmission pid t
+                        localTxSubmission pid tr''
             connectClient client dummyNodeToClientVersion addr
-            print ("hi"::String)
 
         , networkTip =
             error "networkTip unimplemented"
@@ -446,10 +433,11 @@ dummyNodeToClientVersion =
 -- constructor.
 chainSyncWithBlocks
     :: forall m protocol peerId. (protocol ~ ChainSync ByronBlock (Tip ByronBlock))
-    => (MonadThrow m, Show peerId, MonadST m)
+    => (MonadThrow m, MonadST m)
+       -- TODO: m ~ IO is only required for the logging transform. Seems silly.
     => peerId
         -- ^ An abstract peer identifier for 'runPeer'
-    -> Tracer m String
+    -> Tracer m (TraceSendRecv protocol peerId DeserialiseFailure)
         -- ^ Base tracer for the mini-protocols
     -> ChainParameters
         -- ^ Some chain parameters necessary to encode/decode Byron 'Block'
@@ -462,11 +450,9 @@ chainSyncWithBlocks
         -- transports serialized messages between peers (e.g. a unix
         -- socket).
     -> m Void
-chainSyncWithBlocks pid t params action startPoints channel =
-    runPeer trace codec pid channel (chainSyncClientPeer client)
+chainSyncWithBlocks pid tr params action startPoints channel = do
+    runPeer tr codec pid channel (chainSyncClientPeer client)
   where
-    trace :: Tracer m (TraceSendRecv protocol peerId DeserialiseFailure)
-    trace = contramap show t
 
     codec :: Codec protocol DeserialiseFailure m ByteString
     codec = codecChainSync
@@ -558,29 +544,33 @@ chainSyncWithBlocks pid t params action startPoints channel =
                     }
             )
 
+
+ourobourosTrace :: (Show a) => Trace m Text -> IO (Tracer m a)
+ourobourosTrace t = do
+    m <- mkLOMeta Info Public
+    return $ contramap (\x -> LogObject ["ourobouros-network"] m (LogMessage $ T.pack $ show x)) t
+
+
 -- | Client for the 'Local Tx Submission' mini-protocol.
 --
 -- A corresponding 'Channel' can be obtained using a `MuxInitiatorApplication`
 -- constructor.
 localTxSubmission
     :: forall m protocol peerId. ()
-    => (MonadThrow m, MonadTimer m, MonadST m, Show peerId)
+    => (MonadThrow m, MonadTimer m, MonadST m )
     => (protocol ~ LocalTxSubmission Tx String)
     => peerId
         -- ^ An abstract peer identifier for 'runPeer'
-    -> Tracer m String
+    -> Tracer m (TraceSendRecv protocol peerId DeserialiseFailure)
         -- ^ Base tracer for the mini-protocols
     -> Channel m ByteString
         -- ^ A 'Channel' is a abstract communication instrument which
         -- transports serialized messages between peers (e.g. a unix
         -- socket).
     -> m Void
-localTxSubmission pid t channel =
-    runPeer trace codec pid channel (localTxSubmissionClientPeer client)
+localTxSubmission pid tr channel =
+    runPeer tr codec pid channel (localTxSubmissionClientPeer client)
   where
-    trace :: Tracer m (TraceSendRecv protocol peerId DeserialiseFailure)
-    trace = contramap show t
-
     codec :: Codec protocol DeserialiseFailure m ByteString
     codec = codecLocalTxSubmission
         encodeByronGenTx -- Tx -> CBOR.Encoding
