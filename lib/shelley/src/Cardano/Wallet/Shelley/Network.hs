@@ -308,12 +308,12 @@ newNetworkLayer tr (ConnectionParams _ params addr)= do
     return $ NetworkLayer
         { follow = \knownPoints action -> do
             logInfo tr "following starting"
-            tr' <- ourobourosTrace tr
+            let tr' = nullTracer
             tr'' <- ourobourosTrace tr
             let client = OuroborosInitiatorApplication $ \pid -> \case
                     ChainSyncWithBlocksPtcl ->
                         chainSyncWithBlocks
-                            pid tr' params
+                            pid tr tr' params
                             (\x -> logInfo tr "follower stepping..." >> action x)
                             (map toPoint knownPoints)
                     LocalTxSubmissionPtcl ->
@@ -433,10 +433,11 @@ dummyNodeToClientVersion =
 -- constructor.
 chainSyncWithBlocks
     :: forall m protocol peerId. (protocol ~ ChainSync ByronBlock (Tip ByronBlock))
-    => (MonadThrow m, MonadST m)
+    => (MonadThrow m, m ~ IO)
        -- TODO: m ~ IO is only required for the logging transform. Seems silly.
     => peerId
         -- ^ An abstract peer identifier for 'runPeer'
+    -> Trace m Text
     -> Tracer m (TraceSendRecv protocol peerId DeserialiseFailure)
         -- ^ Base tracer for the mini-protocols
     -> ChainParameters
@@ -450,7 +451,7 @@ chainSyncWithBlocks
         -- transports serialized messages between peers (e.g. a unix
         -- socket).
     -> m Void
-chainSyncWithBlocks pid tr params action startPoints channel = do
+chainSyncWithBlocks pid t tr params action _startPoints channel = do
     runPeer tr codec pid channel (chainSyncClientPeer client)
   where
 
@@ -496,7 +497,7 @@ chainSyncWithBlocks pid tr params action startPoints channel = do
         -- Find intersection between wallet and node chains.
         clientStIdle :: m (ClientStIdle ByronBlock (Tip ByronBlock) m Void)
         clientStIdle = do
-                pure $ SendMsgFindIntersect startPoints $ ClientStIntersect
+                pure $ SendMsgFindIntersect [O.genesisPoint] $ ClientStIntersect
                     { recvMsgIntersectFound = \intersection _tip ->
                         ChainSyncClient $
                             clientStFetchingBlocks intersection
@@ -512,17 +513,17 @@ chainSyncWithBlocks pid tr params action startPoints channel = do
         clientStFetchingBlocks start = pure $ SendMsgRequestNext
             (ClientStNext
                 { recvMsgRollForward = \block _tip -> ChainSyncClient $ do
+                    logInfo t "roll forward"
                     action $ RollForward block
                     clientStFetchingBlocks start
                 , recvMsgRollBackward = \point _tip -> ChainSyncClient $ do
+                    logInfo t "roll backward"
                     -- TODO: Where do we want this conversion?
-                    let slotIdFromPoint (O.Point p) =
+                    let slotIdFromPoint (O.Point p) = maybe (SlotId 0 0) id $
                             fromFlatSlot (EpochLength 21600)
                             . O.unSlotNo
                             . Point.blockPointSlot
-                            . maybe (error "TODO: handle genesis case") id
-                            . Point.withOriginToMaybe
-                            $ p
+                            <$> Point.withOriginToMaybe p
                     action $ RollBackTo (slotIdFromPoint point)
                     clientStFetchingBlocks start
                 }

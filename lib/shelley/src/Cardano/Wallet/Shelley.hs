@@ -244,7 +244,7 @@ toWalletBlock b = W.Block
                 in
                     map convertTx txs
             CC.ABOBBoundary _ ->
-                error "Our friend the Epoch Boundary Block!"
+                []
     , delegations = []
     }
 
@@ -297,7 +297,7 @@ convertBlockHeader b = W.BlockHeader
         O.BlockHash h ->
             convertHash h
         O.GenesisHash ->
-            error "how do we represent the genesis hash?"
+            W.Hash $ BS.pack $ replicate 32 0
             -- Seems like a minor problem.
     convertBlockNo = Quantity . fromIntegral . O.unBlockNo
 
