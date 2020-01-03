@@ -33,6 +33,7 @@ module Cardano.Wallet.Shelley
 import Prelude
 
 
+import Cardano.Binary
 import Cardano.BM.Trace
     ( Trace, appendName, logInfo )
 import Cardano.CLI
@@ -266,7 +267,7 @@ convertTx tx = W.Tx
         (convertAddr $ CC.txOutAddress o)
         (convertCoin $ CC.txOutValue o)
       where
-        convertAddr = error "todo use toBinary"
+        convertAddr a = W.Address $ serialize' a
         -- Byron addresses should be no problem. I'm not sure how Shelley
         -- addresses will look.
         convertCoin = W.Coin . CC.unsafeGetLovelace
