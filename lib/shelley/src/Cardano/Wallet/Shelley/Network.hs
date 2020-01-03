@@ -2,7 +2,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 --{-# OPTIONS_GHC -fno-warn-unused-imports -fno-warn-redundant-constraints
 --   -fno-warn-unused-matches -fno-warn-unused-local-binds #-}
@@ -21,12 +20,13 @@ module Cardano.Wallet.Shelley.Network
     ( point1
       -- * Top-Level Interface
     , ChainParameters (..)
-    , mkNetworkLayer
     , withNetworkLayer
     , UseRunningOrLaunch (..)
     , LaunchConfig (..)
     , ConnectionParams (..)
     , mainnetConnectionParams
+    , Network (..)
+    , byronBlockchainParameters
 
     -- * Re-Export
     , EpochSlots (..)
@@ -55,7 +55,18 @@ import Cardano.Wallet.Logging
     ( transformTextTrace )
 import Cardano.Wallet.Network
 import Cardano.Wallet.Primitive.Types
-    ( Hash (..) )
+    ( ActiveSlotCoefficient (..)
+    , BlockHeader (..)
+    , BlockchainParameters (..)
+    , EpochLength (..)
+    , FeePolicy (..)
+    , Hash (..)
+    , SlotId (..)
+    , SlotLength (..)
+    , StartTime (..)
+    , flatSlot
+    , fromFlatSlot
+    )
 import Codec.SerialiseTerm
     ( CodecCBORTerm )
 import Control.Exception
@@ -70,10 +81,16 @@ import Control.Tracer
     ( Tracer, contramap )
 import Data.ByteString.Lazy
     ( ByteString )
+import Data.Quantity
+    ( Quantity (..) )
 import Data.Text
     ( Text )
+import Data.Time.Clock.POSIX
+    ( posixSecondsToUTCTime )
 import Data.Void
     ( Void )
+import Data.Word
+    ( Word16 )
 import Network.Mux.Interface
     ( AppType (..) )
 import Network.Mux.Types
@@ -102,7 +119,7 @@ import Ouroboros.Consensus.Ledger.Byron
 import Ouroboros.Consensus.NodeId
     ( CoreNodeId (..) )
 import Ouroboros.Network.Block
-    ( Point, Tip (..), genesisPoint )
+    ( Point, Tip (..) )
 import Ouroboros.Network.Magic
     ( NetworkMagic (..) )
 import Ouroboros.Network.Mux
@@ -139,6 +156,7 @@ import Ouroboros.Network.Protocol.LocalTxSubmission.Type
 
 import qualified Cardano.Crypto as CC
 import qualified Codec.Serialise as CBOR
+import qualified Crypto.Hash as Crypto
 import qualified Network.Socket as Socket
 import qualified Ouroboros.Network.Block as O
 import qualified Ouroboros.Network.Point as Point
@@ -158,6 +176,8 @@ point1 =
 --
 --
 --
+
+data Network = Mainnet | Testnet
 
 -- | Whether to start Jormungandr with the given config, or to connect to an
 -- already running Jormungandr REST API using the given parameters.
@@ -187,12 +207,12 @@ data ErrStartup
 -- 'NetworkLayer'. The caller is responsible for handling errors which may have
 -- occurred while starting the Node.
 withNetworkLayer
-    :: forall a t. ()
+    :: forall a . ()
     => Trace IO Text
     -- ^ Logging
     -> UseRunningOrLaunch
     -- ^ How Jörmungandr is started.
-    -> (Either ErrStartup (ConnectionParams, NetworkLayer IO t ByronBlock) -> IO a)
+    -> (Either ErrStartup (ConnectionParams, NetworkLayer IO ByronBlock) -> IO a)
     -- ^ The action to run. It will be passed the connection parameters used,
     -- and a network layer if startup was successful.
     -> IO a
@@ -200,12 +220,12 @@ withNetworkLayer tr (UseRunning cp) action = withNetworkLayerConn tr cp action
 withNetworkLayer tr (Launch lj) action = withNetworkLayerLaunch tr lj action
 
 withNetworkLayerLaunch
-    :: forall a t. ()
+    :: forall a. ()
     => Trace IO Text
     -- ^ Logging of node startup.
     -> LaunchConfig
     -- ^ Configuration for starting J√∂rmungandr.
-    -> (Either ErrStartup (ConnectionParams, NetworkLayer IO t ByronBlock) -> IO a)
+    -> (Either ErrStartup (ConnectionParams, NetworkLayer IO ByronBlock) -> IO a)
     -- ^ The action to run. It will be passed the connection parameters used,
     -- and a network layer if startup was successful.
     -> IO a
@@ -217,7 +237,7 @@ mainnetConnectionParams =
     let
         -- I have cardano-node running from ../cardano-node
         nodeId = CoreNodeId 0
-        path = "../cardano-node/socket/" <> (localSocketFilePath nodeId)
+        path = "~/IOHK/cardano-node/socket/" <> (localSocketFilePath nodeId)
         addr =  localSocketAddrInfo path
 
         params = ChainParameters
@@ -238,7 +258,7 @@ withNode
 withNode tr launchConfig action = do
     let args = []
     let cmd = Command
-            "../cardano-node/scripts/mainnet.sh"
+            "../../../cardano-node/scripts/mainnet.sh"
             args
             (return ())
             (outputStream launchConfig)
@@ -248,86 +268,99 @@ withNode tr launchConfig action = do
     return $ either (error "startup failed (todo: proper error)") id res
 
 withNetworkLayerConn
-    :: forall a t. ()
+    :: forall a. ()
     => Trace IO Text
     -- ^ Logging of network layer startup
     -> ConnectionParams
     -- ^ Parameters for connecting to J√∂rmungandr node which is already running.
-    -> (Either ErrStartup (ConnectionParams, NetworkLayer IO t ByronBlock) -> IO a)
+    -> (Either ErrStartup (ConnectionParams, NetworkLayer IO ByronBlock) -> IO a)
     -- ^ Action to run with the network layer.
     -> IO a
 withNetworkLayerConn tr connectionParams action = do
     nw <- newNetworkLayer tr connectionParams
     action $ Right (connectionParams, nw)
 
+-- | Hard-coded slot duration
+byronSlotLength :: SlotLength
+byronSlotLength = SlotLength 20
+
+-- | Hard-coded max transaction size
+byronTxMaxSize :: Quantity "byte" Word16
+byronTxMaxSize = Quantity 8192
+
+-- | Hard-coded fee policy for Cardano on Byron
+byronFeePolicy :: FeePolicy
+byronFeePolicy = LinearFee (Quantity 155381) (Quantity 43.946) (Quantity 0)
+
+byronBlockchainParameters
+     :: Network
+     -> BlockchainParameters
+byronBlockchainParameters n = BlockchainParameters
+     { getGenesisBlockHash = Hash "genesis"
+     , getGenesisBlockDate = case n of
+         Mainnet -> StartTime $ posixSecondsToUTCTime 1506203091
+         Testnet -> StartTime $ posixSecondsToUTCTime 1563999616
+     , getFeePolicy = byronFeePolicy
+     , getSlotLength = byronSlotLength
+     , getTxMaxSize = byronTxMaxSize
+     , getEpochLength = EpochLength 21600
+     , getEpochStability = Quantity 2160
+     , getActiveSlotCoefficient = ActiveSlotCoefficient 1
+     }
+
 -- | Creates a new 'NetworkLayer' connecting to an underlying 'Jormungandr'
 -- backend target.
 newNetworkLayer
-    :: forall t. ()
-    => Trace IO Text
+    :: Trace IO Text
     -> ConnectionParams
-    -> IO (NetworkLayer IO t ByronBlock)
+    -> IO (NetworkLayer IO ByronBlock)
 newNetworkLayer _tr (ConnectionParams _ params addr)= do
     -- TODO: Note we are discarding the tracer here
     let t = nullTracer
+    return $ NetworkLayer
+        { follow = \knownPoints action -> do
+            print ("follow"::String)
+            let client = OuroborosInitiatorApplication $ \pid -> \case
+                    ChainSyncWithBlocksPtcl ->
+                        chainSyncWithBlocks
+                            pid t params
+                            action
+                            (map toPoint knownPoints)
+                    LocalTxSubmissionPtcl ->
+                        localTxSubmission pid t
+            connectClient client dummyNodeToClientVersion addr
+            print ("hi"::String)
 
-    let rollForward _ = return ()
-    let rollBackward _ = return ()
+        , networkTip =
+            error "networkTip unimplemented"
 
+        , postTx =
+            error ""
 
-    let client = OuroborosInitiatorApplication $ \pid -> \case
-            ChainSyncWithBlocksPtcl ->
-                chainSyncWithBlocks
-                    pid t params
-                    rollForward
-                    rollBackward
-                    genesisPoint
-            LocalTxSubmissionPtcl ->
-                localTxSubmission pid t
-    connectClient client dummyNodeToClientVersion addr
+        , staticBlockchainParameters =
+            let block0 =
+            (block0, byronBlockchainParameters Testnet)
 
-    --liftIO $ waitForService "J√∂rmungandr" tr (Port $ baseUrlPort baseUrl) $
-    --    waitForNetwork (void $ getTipId jor) defaultRetryPolicy
+        , stakeDistribution =
+            error "stakeDistribution"
+        , getAccountBalance =
+            error "getAccountBalance not implemented in Byron. TODO: return 0?"
+        }
 
-    -- (block0, bp) <- getInitialBlockchainParameters jor (coerce block0H)
-    return $ mkNetworkLayer 10
+  where
+    toPoint :: BlockHeader -> Point ByronBlock
+    toPoint (BlockHeader sid _ h _) =
+        O.Point $ Point.block
+            (convertSlot sid)
+            (convertHash h)
 
---------------------------------------------------------------------------------
---
--- NetworkLayer
+    convertSlot :: SlotId -> O.SlotNo
+    convertSlot = O.SlotNo . flatSlot (EpochLength 21600)
 
-mkNetworkLayer
-    :: forall m t block. ()
-    => Word
-        -- ^ Batch size when fetching blocks from Jörmungandr
-    -> NetworkLayer m t block
-mkNetworkLayer _batchSize = NetworkLayer
-    { networkTip =
-        error "networkTip unimplemented"
-
-    , findIntersection =
-        error ""
-
-    , nextBlocks =
-        error ""
-
-    , initCursor =
-        error ""
-
-    , cursorSlotId =
-        error ""
-
-    , postTx =
-        error ""
-
-    , staticBlockchainParameters =
-        error ""
-
-    , stakeDistribution =
-        error "stakeDistribution"
-    , getAccountBalance =
-        error "getAccountBalance not implemented in Byron. TODO: return 0?"
-    }
+    convertHash (Hash bytes) =
+          case Crypto.digestFromByteString bytes of
+            Nothing     -> error "digestFromByteString failed"
+            Just digest -> ByronHash $ CC.AbstractHash digest
 
 --------------------------------------------------------------------------------
 --
@@ -418,18 +451,16 @@ chainSyncWithBlocks
         -- ^ Base tracer for the mini-protocols
     -> ChainParameters
         -- ^ Some chain parameters necessary to encode/decode Byron 'Block'
-    -> (ByronBlock -> m ())
-        -- ^ Action to take when receiving a block
-    -> (Point ByronBlock -> m ())
-        -- ^ Action to take when receiving a block
-    -> Point ByronBlock
-        -- ^ Starting point
+    -> (RollForwardOrBack ByronBlock -> m ())
+        -- ^ Action to take when receiving a block or rolling back
+    -> [Point ByronBlock]
+        -- ^ Starting point(s)
     -> Channel m ByteString
         -- ^ A 'Channel' is a abstract communication instrument which
         -- transports serialized messages between peers (e.g. a unix
         -- socket).
     -> m Void
-chainSyncWithBlocks pid t params forward backward startPoint channel =
+chainSyncWithBlocks pid t params action startPoints channel =
     runPeer trace codec pid channel (chainSyncClientPeer client)
   where
     trace :: Tracer m (TraceSendRecv protocol peerId DeserialiseFailure)
@@ -477,10 +508,10 @@ chainSyncWithBlocks pid t params forward backward startPoint channel =
         -- Find intersection between wallet and node chains.
         clientStIdle :: m (ClientStIdle ByronBlock (Tip ByronBlock) m Void)
         clientStIdle = do
-                pure $ SendMsgFindIntersect [startPoint] $ ClientStIntersect
-                    { recvMsgIntersectFound = \_intersection _tip ->
+                pure $ SendMsgFindIntersect startPoints $ ClientStIntersect
+                    { recvMsgIntersectFound = \intersection _tip ->
                         ChainSyncClient $
-                            clientStFetchingBlocks startPoint
+                            clientStFetchingBlocks intersection
                     , recvMsgIntersectNotFound = \_tip ->
                         ChainSyncClient $ do
                             clientStIdle
@@ -493,10 +524,18 @@ chainSyncWithBlocks pid t params forward backward startPoint channel =
         clientStFetchingBlocks start = pure $ SendMsgRequestNext
             (ClientStNext
                 { recvMsgRollForward = \block _tip -> ChainSyncClient $ do
-                    forward block
+                    action $ RollForward block
                     clientStFetchingBlocks start
                 , recvMsgRollBackward = \point _tip -> ChainSyncClient $ do
-                    backward point
+                    -- TODO: Where do we want this conversion?
+                    let slotIdFromPoint (O.Point p) =
+                            fromFlatSlot (EpochLength 21600)
+                            . O.unSlotNo
+                            . Point.blockPointSlot
+                            . maybe (error "TODO: handle genesis case") id
+                            . Point.withOriginToMaybe
+                            $ p
+                    action $ RollBackTo (slotIdFromPoint point)
                     clientStFetchingBlocks start
                 }
             )

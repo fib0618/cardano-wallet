@@ -145,8 +145,8 @@ import Cardano.Wallet.Network
     ( ErrGetAccountBalance (..)
     , ErrNetworkUnavailable (..)
     , ErrPostTx (..)
-    , FollowAction (..)
     , NetworkLayer (..)
+    , RollForwardOrBack (..)
     , follow
     )
 import Cardano.Wallet.Primitive.AddressDerivation
@@ -242,6 +242,8 @@ import Cardano.Wallet.Transaction
     , ErrValidateSelection
     , TransactionLayer (..)
     )
+import Cardano.Wallet.Unsafe
+    ( unsafeRunExceptT )
 import Control.DeepSeq
     ( NFData )
 import Control.Monad
@@ -251,7 +253,7 @@ import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
     ( lift )
 import Control.Monad.Trans.Except
-    ( ExceptT (..), except, mapExceptT, runExceptT, throwE, withExceptT )
+    ( ExceptT (..), except, mapExceptT, throwE, withExceptT )
 import Control.Monad.Trans.Maybe
     ( MaybeT (..), maybeToExceptT )
 import Control.Monad.Trans.State.Strict
@@ -349,7 +351,7 @@ data WalletLayer s t (k :: Depth -> * -> *)
     = WalletLayer
         (Trace IO Text)
         (Block, BlockchainParameters, SyncTolerance)
-        (NetworkLayer IO t Block)
+        (NetworkLayer IO Block)
         (TransactionLayer t k)
         (DBLayer IO s k)
     deriving (Generic)
@@ -392,7 +394,7 @@ type HasLogger = HasType (Trace IO Text)
 
 -- | This module is only interested in one block-, and tx-type. This constraint
 -- hides that choice, for some ease of use.
-type HasNetworkLayer t = HasType (NetworkLayer IO t Block)
+type HasNetworkLayer = HasType (NetworkLayer IO Block)
 
 type HasTransactionLayer t k = HasType (TransactionLayer t k)
 
@@ -415,10 +417,10 @@ logger =
     typed @(Trace IO Text)
 
 networkLayer
-    :: forall t ctx. (HasNetworkLayer t ctx)
-    => Lens' ctx (NetworkLayer IO t Block)
+    :: forall ctx. (HasNetworkLayer ctx)
+    => Lens' ctx (NetworkLayer IO Block)
 networkLayer =
-    typed @(NetworkLayer IO t Block)
+    typed @(NetworkLayer IO Block)
 
 transactionLayer
     :: forall t k ctx. (HasTransactionLayer t k ctx)
@@ -538,9 +540,9 @@ listUtxoStatistics ctx wid = do
 -- background that will fetch and apply remaining blocks until the
 -- network tip is reached or until failure.
 restoreWallet
-    :: forall ctx s t k.
+    :: forall ctx s k.
         ( HasLogger ctx
-        , HasNetworkLayer t ctx
+        , HasNetworkLayer ctx
         , HasDBLayer s k ctx
         , HasGenesisData ctx
         )
@@ -549,16 +551,14 @@ restoreWallet
     -> ExceptT ErrNoSuchWallet IO ()
 restoreWallet ctx wid = db & \DBLayer{..} -> do
     cps <- liftIO $ atomically $ listCheckpoints (PrimaryKey wid)
-    let forward bs h = run $ restoreBlocks @ctx @s @k ctx wid bs h
-    let backward sid = run $ mapExceptT atomically $ rollbackTo (PrimaryKey wid) sid
-    void $ liftIO $ follow nw tr cps forward backward (view #header)
+    void . liftIO $ follow nw cps $ \case
+        RollForward block ->
+            unsafeRunExceptT $ restoreBlocks @ctx @s @k ctx wid (NE.fromList [block]) (header block)
+        RollBackTo point ->
+            unsafeRunExceptT $ mapExceptT atomically $ rollbackTo (PrimaryKey wid) point
   where
     db = ctx ^. dbLayer @s @k
-    nw = ctx ^. networkLayer @t
-    tr = ctx ^. logger
-
-    run :: ExceptT ErrNoSuchWallet IO () -> IO (FollowAction ErrNoSuchWallet)
-    run = fmap (either ExitWith (const Continue)) . runExceptT
+    nw = ctx ^. networkLayer
 
 -- | Apply the given blocks to the wallet and update the wallet state,
 -- transaction history and corresponding metadata.
@@ -670,9 +670,9 @@ deleteWallet ctx wid = db & \DBLayer{..} -> do
 -- Rather than force all callers of 'readWallet' to wait for fetching the
 -- account balance (via the 'NetworkLayer'), we expose this function for it.
 fetchRewardBalance
-    :: forall ctx s k t.
+    :: forall ctx s k.
         ( HasDBLayer s k ctx
-        , HasNetworkLayer t ctx
+        , HasNetworkLayer ctx
         , HasRewardAccount s
         , k ~ RewardAccountKey s
         , WalletKey k
@@ -693,7 +693,7 @@ fetchRewardBalance ctx wid = db & \DBLayer{..} -> do
         $ getState cp
   where
     db = ctx ^. dbLayer @s @k
-    nw = ctx ^. networkLayer @t
+    nw = ctx ^. networkLayer
     handleErr = \case
         Right x -> Right x
         Left (ErrGetAccountBalanceAccountNotFound _) ->
@@ -1093,8 +1093,8 @@ mkTxMeta bp blockHeader wState ins outs =
 
 -- | Broadcast a (signed) transaction to the network.
 submitTx
-    :: forall ctx s t k.
-        ( HasNetworkLayer t ctx
+    :: forall ctx s k.
+        ( HasNetworkLayer ctx
         , HasDBLayer s k ctx
         )
     => ctx
@@ -1107,12 +1107,12 @@ submitTx ctx wid (tx, meta, binary) = db & \DBLayer{..} -> do
         putTxHistory (PrimaryKey wid) [(tx, meta)]
   where
     db = ctx ^. dbLayer @s @k
-    nw = ctx ^. networkLayer @t
+    nw = ctx ^. networkLayer
 
 -- | Broadcast an externally-signed transaction to the network.
 submitExternalTx
     :: forall ctx t k.
-        ( HasNetworkLayer t ctx
+        ( HasNetworkLayer ctx
         , HasTransactionLayer t k ctx
         )
     => ctx
@@ -1124,7 +1124,7 @@ submitExternalTx ctx bytes = do
     withExceptT ErrSubmitExternalTxNetwork $ postTx nw binary
     return tx
   where
-    nw = ctx ^. networkLayer @t
+    nw = ctx ^. networkLayer
     tl = ctx ^. transactionLayer @t @k
 
 -- | Forget pending transaction.
@@ -1230,7 +1230,7 @@ joinStakePool
     :: forall ctx s t k.
         ( HasDBLayer s k ctx
         , HasLogger ctx
-        , HasNetworkLayer t ctx
+        , HasNetworkLayer ctx
         , HasTransactionLayer t k ctx
         , Show s
         , NFData s
@@ -1262,7 +1262,7 @@ joinStakePool ctx wid (pid, pools) argGenChange pwd = db & \DBLayer{..} -> do
         signDelegation @ctx @s @t @k ctx wid argGenChange pwd selection pid Join
 
     withExceptT ErrJoinStakePoolSubmitTx $
-        submitTx @ctx @s @t @k ctx wid (tx, txMeta, sealedTx)
+        submitTx @ctx @s @k ctx wid (tx, txMeta, sealedTx)
 
     pure (tx, txMeta, txTime)
   where
@@ -1273,7 +1273,7 @@ quitStakePool
     :: forall ctx s t k.
         ( HasDBLayer s k ctx
         , HasLogger ctx
-        , HasNetworkLayer t ctx
+        , HasNetworkLayer ctx
         , HasTransactionLayer t k ctx
         , Show s
         , NFData s
@@ -1302,7 +1302,7 @@ quitStakePool ctx wid pid argGenChange pwd = db & \DBLayer{..} -> do
         signDelegation @ctx @s @t @k ctx wid argGenChange pwd selection pid Quit
 
     withExceptT ErrQuitStakePoolSubmitTx $
-        submitTx @ctx @s @t @k ctx wid (tx, txMeta, sealedTx)
+        submitTx @ctx @s @k ctx wid (tx, txMeta, sealedTx)
 
     pure (tx, txMeta, txTime)
   where

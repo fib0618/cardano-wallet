@@ -37,6 +37,7 @@ library
     , async
     , warp
     , deepseq
+    , cryptonite
     , cardano-ledger
     , cardano-crypto-wrapper
     , cardano-wallet-core

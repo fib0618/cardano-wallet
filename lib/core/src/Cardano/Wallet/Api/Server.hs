@@ -535,7 +535,7 @@ postWallet ctx body = do
     let s = mkSeqState (rootXPrv, pwd) g
     let wid = WalletId $ digest $ publicKey rootXPrv
     let wName = getApiT (body ^. #name)
-    void $ liftHandler $ createWallet @_ @s @t @k ctx wid wName s
+    void $ liftHandler $ createWallet @_ @s @k ctx wid wName s
     liftHandler $ withWorkerCtx @_ @s @k ctx wid throwE $ \wrk ->
         W.attachPrivateKey @_ @s @k wrk wid (rootXPrv, pwd)
     getWallet ctx (ApiT wid)
@@ -718,7 +718,7 @@ postTransaction ctx (ApiT wid) body = do
         W.signPayment @_ @s @t @k wrk wid () pwd selection
 
     liftHandler $ withWorkerCtx ctx wid liftE3 $ \wrk ->
-        W.submitTx @_ @s @t @k wrk wid (tx, meta, wit)
+        W.submitTx @_ @s @k wrk wid (tx, meta, wit)
 
     pure $ mkApiTransaction
         (txId tx)
@@ -963,7 +963,7 @@ network ctx = do
                 }
         }
   where
-    nl = ctx ^. networkLayer @t
+    nl = ctx ^. networkLayer
     (_, bp, st) = ctx ^. genesisData
     sp :: W.SlotParameters
     sp = W.SlotParameters
@@ -1093,7 +1093,7 @@ migrateByronWallet rndCtx seqCtx (ApiT rndWid) (ApiT seqWid) migrateData = do
                     wrk rndWid (xprv, passphrase) passphrase selection
         liftHandler
             $ withWorkerCtx rndCtx rndWid (throwE . ErrSubmitTxNoSuchWallet)
-            $ \wrk -> W.submitTx @_ @_ @t wrk rndWid (tx, meta, wit)
+            $ \wrk -> W.submitTx @_ @_ wrk rndWid (tx, meta, wit)
         pure $ mkApiTransaction
             (txId tx)
             (fmap Just <$> selection ^. #inputs)
@@ -1122,7 +1122,7 @@ postByronWallet
 postByronWallet ctx body = do
     void
         . liftHandler
-        . createWallet @_ @_ @t ctx wid name
+        . createWallet @_ @_ ctx wid name
         . mkRndState rootXPrv
         =<< liftIO (getStdRandom random)
     liftHandler $ withWorkerCtx ctx wid throwE $ \worker ->
@@ -1168,12 +1168,12 @@ deleteByronTransaction ctx (ApiT wid) (ApiTxId (ApiT (tid))) = do
 
 -- | see 'Cardano.Wallet#createWallet'
 createWallet
-    :: forall ctx s t k.
+    :: forall ctx s k.
         ( HasWorkerRegistry s k ctx
         , HasDBFactory s k ctx
         , HasLogger ctx
         , HasGenesisData (WorkerCtx ctx)
-        , HasNetworkLayer t (WorkerCtx ctx)
+        , HasNetworkLayer (WorkerCtx ctx)
         , HasLogger (WorkerCtx ctx)
         , Show s
         , NFData s
@@ -1207,7 +1207,7 @@ createWallet ctx wid a0 a1 =
             -- FIXME:
             -- Review error handling here
             unsafeRunExceptT $
-                W.restoreWallet @(WorkerCtx ctx) @s @t @k ctx' wid
+                W.restoreWallet @(WorkerCtx ctx) @s @k ctx' wid
 
         , workerAfter =
             defaultWorkerAfter
@@ -1293,7 +1293,7 @@ getWalletWithCreationTime ctx wid = do
         liftHandler $ withWorkerCtx ctx wid throwE $
             \wrk -> W.readWallet wrk wid
     reward <- liftHandler $ withWorkerCtx ctx wid (throwE . ErrFetchRewardsNoSuchWallet) $
-            \wrk -> W.fetchRewardBalance @_ @s @k @t wrk wid
+            \wrk -> W.fetchRewardBalance @_ @s @k wrk wid
     progress <- liftIO $ W.walletSyncProgress ctx wallet
 
     let apiWallet = ApiWallet
@@ -1363,7 +1363,7 @@ newApiLayer
     :: forall ctx s t k. ctx ~ ApiLayer s t k
     => Trace IO Text
     -> (Block, BlockchainParameters, SyncTolerance)
-    -> NetworkLayer IO t Block
+    -> NetworkLayer IO Block
     -> TransactionLayer t k
     -> DBFactory IO s k
     -> [WalletId]
@@ -1383,7 +1383,7 @@ newApiLayer tr g0 nw tl df wids = do
                     -- FIXME:
                     -- Review error handling here
                     unsafeRunExceptT $
-                        W.restoreWallet @(WorkerCtx ctx) @s @t ctx' wid
+                        W.restoreWallet @(WorkerCtx ctx) @s ctx' wid
 
                 , workerAfter =
                     defaultWorkerAfter

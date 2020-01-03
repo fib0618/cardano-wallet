@@ -160,9 +160,9 @@ serveWallet
     -- TODO: We are not calling beforeMainLoop. We don't have a port to pass in.
     installSignalHandlers trText
     logInfo trText "Wallet backend server starting..."
-    logInfo trText $ "Node is Jörmungandr on " <> toText (networkDiscriminantVal @n)
+    logInfo trText $ "Haskell node on " <> toText (networkDiscriminantVal @n)
     Server.withListeningSocket hostPref listen $ \case
-        Left _e -> error "todo"
+        Left e -> print e $> ExitFailure 1 -- TODO
         Right (wPort, socket) -> do
             let tracerIPC = appendName "daedalus-ipc" trText
             either id id <$> race
@@ -181,6 +181,7 @@ serveWallet
             rndApi  <- apiLayer trText rndTl (toWalletBlock <$> nl)
             seqApi  <- apiLayer trText seqTl (toWalletBlock <$> nl)
             let tr' = contramap (fmap LogApiServerMsg) tr
+            print ("hi serveApp"::String)
             startServer tr' socket bp rndApi seqApi spl
             pure ExitSuccess
 
@@ -209,7 +210,7 @@ serveWallet
             )
         => Trace IO Text
         -> TransactionLayer t k
-        -> NetworkLayer IO t Block
+        -> NetworkLayer IO Block
         -> IO (ApiLayer s t k)
     apiLayer tracer tl nl = do
         let (block0, bp) = staticBlockchainParameters nl

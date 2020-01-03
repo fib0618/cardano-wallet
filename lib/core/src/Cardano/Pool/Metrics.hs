@@ -49,7 +49,7 @@ import Cardano.BM.Data.Severity
 import Cardano.BM.Data.Tracer
     ( DefinePrivacyAnnotation (..), DefineSeverity (..) )
 import Cardano.BM.Trace
-    ( Trace, logDebug, logInfo, logNotice )
+    ( Trace )
 import Cardano.Pool.DB
     ( DBLayer (..), ErrPointAlreadyExists )
 import Cardano.Pool.Metadata
@@ -64,9 +64,7 @@ import Cardano.Wallet.Logging
 import Cardano.Wallet.Network
     ( ErrNetworkTip
     , ErrNetworkUnavailable
-    , FollowAction (..)
-    , NetworkLayer (networkTip, stakeDistribution)
-    , follow
+    , NetworkLayer (networkTip)
     , staticBlockchainParameters
     )
 import Cardano.Wallet.Primitive.Types
@@ -83,23 +81,21 @@ import Cardano.Wallet.Primitive.Types
 import Control.Arrow
     ( first )
 import Control.Monad
-    ( forM, forM_, when )
+    ( forM, when )
 import Control.Monad.IO.Class
     ( liftIO )
 import Control.Monad.Trans.Class
     ( lift )
 import Control.Monad.Trans.Except
-    ( ExceptT (..), mapExceptT, runExceptT, throwE, withExceptT )
+    ( ExceptT (..), throwE, withExceptT )
 import Control.Tracer
     ( contramap )
 import Data.Functor
     ( (<&>) )
 import Data.Generics.Internal.VL.Lens
-    ( view, (^.) )
+    ( (^.) )
 import Data.List
     ( foldl', nub, nubBy, sortOn, (\\) )
-import Data.List.NonEmpty
-    ( NonEmpty )
 import Data.Map.Merge.Strict
     ( dropMissing, traverseMissing, zipWithMatched )
 import Data.Map.Strict
@@ -160,78 +156,14 @@ data StakePool = StakePool
 -- different forks such that it's safe for readers to access it.
 monitorStakePools
     :: Trace IO Text
-    -> NetworkLayer IO t Block
+    -> NetworkLayer IO Block
     -> DBLayer IO
     -> IO ()
-monitorStakePools tr nl DBLayer{..} = do
-    cursor <- initCursor
-    logInfo tr $ mconcat
-        [ "Start monitoring stake pools. Currently at "
-        , case cursor of
-            [] -> "genesis"
-            _  -> pretty (last cursor)
-        ]
-    follow nl tr cursor forward backward header
-  where
-    initCursor :: IO [BlockHeader]
-    initCursor = do
-        let (block0, bp) = staticBlockchainParameters nl
-        let ep0 = block0 ^. #header . #slotId . #epochNumber
-        let k = fromIntegral . getQuantity . view #getEpochStability $ bp
-        atomically $ do
-            forM_ (poolRegistrations block0)
-                $ \r@PoolRegistrationCertificate{poolId} -> do
-                readPoolRegistration poolId >>= \case
-                    Nothing -> putPoolRegistration ep0 r
-                    Just{}  -> pure ()
-            readPoolProductionCursor k
-
-    backward
-        :: SlotId
-        -> IO (FollowAction ErrMonitorStakePools)
-    backward point = do
-        liftIO . atomically $ rollbackTo point
-        return Continue
-
-    forward
-        :: NonEmpty Block
-        -> BlockHeader
-        -> IO (FollowAction ErrMonitorStakePools)
-    forward blocks nodeTip = handler $ do
-        (ep, dist) <- withExceptT ErrMonitorStakePoolsNetworkUnavailable $
-            stakeDistribution nl
-        currentTip <- withExceptT ErrMonitorStakePoolsNetworkTip $
-            networkTip nl
-        when (nodeTip /= currentTip) $ throwE ErrMonitorStakePoolsWrongTip
-
-        liftIO $ logInfo tr $ "Writing stake-distribution for epoch " <> pretty ep
-
-        let registrations = concatMap poolRegistrations blocks
-        liftIO $ forM_ registrations $ \registration ->
-            logInfo tr $ "Discovered stake pool registration: "
-                <> pretty registration
-
-        mapExceptT atomically $ do
-            lift $ putStakeDistribution ep (Map.toList dist)
-            lift $ mapM_ (putPoolRegistration ep) registrations
-            forM_ blocks $ \b ->
-                withExceptT ErrMonitorStakePoolsPoolAlreadyExists $
-                    putPoolProduction (header b) (producer b)
-      where
-        handler action = runExceptT action >>= \case
-            Left ErrMonitorStakePoolsNetworkUnavailable{} -> do
-                logNotice tr "Network is not available."
-                pure RetryLater
-            Left ErrMonitorStakePoolsNetworkTip{} -> do
-                logNotice tr "Network is not available."
-                pure RetryLater
-            Left ErrMonitorStakePoolsWrongTip{} -> do
-                logDebug tr "Race condition when fetching stake distribution."
-                pure RetryImmediately
-            Left e@ErrMonitorStakePoolsPoolAlreadyExists{} ->
-                pure (ExitWith e)
-            Right () ->
-                pure Continue
+monitorStakePools _tr _nl _db = do
+    -- TODO:
+    -- monitorStakePools was designed for jormungandr. We need to
+    -- generalize it.
+    return ()
 
 -- | Internal error data-type used to drive the 'forward' logic
 data ErrMonitorStakePools
@@ -267,7 +199,7 @@ data ErrListStakePools
 newStakePoolLayer
     :: Trace IO StakePoolLayerMsg
     -> DBLayer IO
-    -> NetworkLayer IO t Block
+    -> NetworkLayer IO Block
     -> FilePath
     -- ^ A directory to cache downloaded stake pool metadata. Will be created if
     -- it does not exist.
